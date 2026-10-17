@@ -1,0 +1,28 @@
+{
+  "name": "kimaticpro",
+  "version": "0.1.0",
+  "description": "KimaticPro — a free, open-source, beginner-friendly parametric 3D CAD app for the web.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "lucide-preact": "1.29.0",
+    "preact": "10.29.7",
+    "three": "0.170.0",
+    "three-bvh-csg": "0.0.17",
+    "three-mesh-bvh": "0.8.3"
+  },
+  "devDependencies": {
+    "@types/three": "0.170.0",
+    "typescript": "5.9.3",
+    "vite": "6.3.5",
+    "vitest": "3.2.4"
+  }
+}

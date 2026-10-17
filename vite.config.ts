@@ -1,0 +1,15 @@
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  base: './',
+  esbuild: { jsx: 'automatic', jsxImportSource: 'preact' },
+  build: {
+    target: 'es2022',
+    chunkSizeWarningLimit: 1500,
+  },
+  test: {
+    environment: 'node',
+    include: ['tests/**/*.test.ts'],
+    setupFiles: ['tests/setup.ts'],
+  },
+} as any);
