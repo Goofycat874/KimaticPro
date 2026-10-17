@@ -1,4 +1,4 @@
-import { useRef } from 'preact/hooks';
+import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import {
   House, Focus, Diamond, Grid3x3, Scissors, Eye, Move, Rotate3d, Scale3d, X, Check, PenLine, Ruler, Box as BoxIcon,
   Copy, Trash2, ArrowDownToLine, EyeOff, Ghost, SquaresUnite, ScanEye, Palette, ArrowUpFromLine, Shapes,
@@ -132,13 +132,24 @@ function EmptyState() {
 function ContextMenu() {
   const cm = useStore((s) => s.contextMenu);
   const ref = useRef<HTMLDivElement>(null);
+  const [shift, setShift] = useState({ x: 0, y: 0 });
   useClickOutside(ref, () => store.set({ contextMenu: null }), !!cm);
+  useLayoutEffect(() => {
+    // keep the whole menu inside the viewport
+    const el = ref.current;
+    if (!el || !cm) return;
+    const host = el.parentElement!.getBoundingClientRect();
+    setShift({
+      x: Math.min(0, host.width - (cm.x + el.offsetWidth) - 8),
+      y: Math.min(0, host.height - (cm.y + el.offsetHeight) - 8),
+    });
+  }, [cm]);
   if (!cm) return null;
   const close = (fn: () => void) => () => { store.set({ contextMenu: null }); fn(); };
   const body = cm.bodyId ? A.bodyById(cm.bodyId) : null;
   const multi = store.state.selection.length > 1;
   return (
-    <div class="ctx-menu" ref={ref} style={{ left: cm.x, top: cm.y }}>
+    <div class="ctx-menu" ref={ref} style={{ left: Math.max(8, cm.x + shift.x), top: Math.max(8, cm.y + shift.y) }}>
       {body ? <>
         <div class="menu-label">{multi ? `${store.state.selection.length} bodies` : body.name}</div>
         <button class="menu-item" onClick={close(() => A.duplicate())}><Copy size={14} /><span class="grow">Duplicate</span><span class="kbd">Ctrl+D</span></button>

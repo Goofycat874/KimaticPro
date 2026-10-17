@@ -134,11 +134,9 @@ export function deleteFeature(id: string) {
     if (f.type === 'sketch') {
       for (const g of doc.features) if ((g.type === 'extrude' || g.type === 'revolve') && g.sketchId === id) dead.add(g.id);
     }
-    const before = doc.features.length;
-    const idx = doc.features.findIndex((x) => x.id === id);
+    const removedBeforeMarker = doc.features.slice(0, doc.marker).filter((x) => dead.has(x.id)).length;
     doc.features = doc.features.filter((x) => !dead.has(x.id));
-    const removedBeforeMarker = before - doc.features.length - (idx >= doc.marker ? dead.size : 0);
-    doc.marker = Math.max(0, Math.min(doc.features.length, doc.marker - Math.max(0, removedBeforeMarker)));
+    doc.marker = Math.max(0, Math.min(doc.features.length, doc.marker - removedBeforeMarker));
   }, { selectedFeature: null });
 }
 
@@ -324,6 +322,16 @@ export function align(axis: 'x' | 'y' | 'z', mode: 'min' | 'center' | 'max') {
   for (const [id, d] of recipeMoves) moveBodiesBy([id], d, `Align ${axis.toUpperCase()}`);
 }
 
+let clipboard: string[] = [];
+export function copySelection() {
+  clipboard = [...store.state.selection];
+  if (clipboard.length) store.toast(`Copied ${clipboard.length} bod${clipboard.length > 1 ? 'ies' : 'y'}`);
+}
+export function paste() {
+  const ids = clipboard.filter((id) => bodyById(id));
+  if (ids.length) duplicate(ids);
+}
+
 export function duplicate(ids = store.state.selection) {
   if (!ids.length) return;
   const bodies = ids.map(bodyById).filter(Boolean) as EvalBody[];
@@ -353,7 +361,6 @@ export function duplicate(ids = store.state.selection) {
       newIds.push(...viaMove.map((b) => `${id}:${b}`));
     }
   }, { selection: newIds });
-  store.set({ selection: newIds });
 }
 
 // ---------------------------------------------------------------------------

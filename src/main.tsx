@@ -5,6 +5,7 @@ import { openFile } from './core/io';
 import { Viewport } from './viewport/Viewport';
 import { App } from './ui/App';
 import { installKeyboard } from './ui/keyboard';
+import { runCmd } from './ui/commands';
 
 const viewport = new Viewport();
 installKeyboard((e) => viewport.handleKey(e));
@@ -22,4 +23,4 @@ window.addEventListener('beforeunload', (e) => {
 render(<App viewport={viewport} />, document.getElementById('app')!);
 
 // handy for debugging and for automation
-(window as any).kimatic = { store, viewport };
+(window as any).kimatic = { store, viewport, run: runCmd };

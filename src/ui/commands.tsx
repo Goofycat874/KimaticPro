@@ -42,6 +42,8 @@ export const COMMANDS: Command[] = [
   // edit
   { id: 'edit.undo', label: 'Undo', group: 'Edit', icon: Undo2, desc: 'Take back the last change.', key: 'Ctrl+Z', run: () => store.undo(), enabled: () => !!store.state.canUndo },
   { id: 'edit.redo', label: 'Redo', group: 'Edit', icon: Redo2, desc: 'Bring back what you undid.', key: 'Ctrl+Y', run: () => store.redo(), enabled: () => !!store.state.canRedo },
+  { id: 'edit.copy', label: 'Copy', group: 'Edit', icon: Copy, desc: 'Copy the selected bodies.', key: 'Ctrl+C', run: () => A.copySelection(), enabled: hasSel },
+  { id: 'edit.paste', label: 'Paste', group: 'Edit', icon: Copy, desc: 'Paste copies of what you copied.', key: 'Ctrl+V', run: () => A.paste() },
   { id: 'edit.duplicate', label: 'Duplicate', group: 'Edit', icon: Copy, desc: 'Make a copy of the selected bodies.', key: 'Ctrl+D', run: () => A.duplicate(), enabled: hasSel },
   { id: 'edit.delete', label: 'Delete', group: 'Edit', icon: Trash2, desc: 'Remove the selection.', key: 'Delete', run: () => A.deleteSelection(), enabled: () => hasSel() || !!store.state.selectedFeature || store.state.sketchSelection.length > 0 },
   { id: 'edit.selectAll', label: 'Select all', group: 'Edit', icon: MousePointer2, desc: 'Select every visible body.', key: 'Ctrl+A', run: () => A.selectAll() },

@@ -52,7 +52,7 @@ export function TopBar() {
       <MenuButton label={<><Menu size={16} /> File <ChevronDown size={13} /></>}
         items={['file.new', 'file.open', 'file.save', '-', 'file.import', '-', 'export.stl', 'export.obj', 'export.glb', 'export.png']} />
       <MenuButton label={<>Edit <ChevronDown size={13} /></>}
-        items={['edit.undo', 'edit.redo', '-', 'edit.duplicate', 'edit.delete', 'edit.selectAll']} />
+        items={['edit.undo', 'edit.redo', '-', 'edit.copy', 'edit.paste', 'edit.duplicate', 'edit.delete', '-', 'edit.selectAll']} />
       <MenuButton label={<>View <ChevronDown size={13} /></>}
         items={['view.home', 'view.fit', '-', 'view.top', 'view.front', 'view.right', 'view.ortho', '-', 'view.grid', 'inspect.ghosts', 'view.isolate', 'view.showAll', '-', 'view.theme']} />
       <MenuButton label={<>Help <ChevronDown size={13} /></>}

@@ -220,7 +220,13 @@ export function Tour() {
   if (rect) {
     left = Math.min(window.innerWidth - 340, Math.max(16, rect.left + rect.width / 2 - 160));
     top = rect.bottom + 14 + 200 < window.innerHeight ? rect.bottom + 14 : Math.max(16, rect.top - 200);
-    if (rect.height > window.innerHeight * 0.5) { top = rect.top + rect.height / 2 - 90; left = rect.left + rect.width / 2 - 160; }
+    if (rect.height > window.innerHeight * 0.5) {
+      // tall targets (panels, viewport): sit beside them, or centred inside if there's no room
+      top = rect.top + 60;
+      if (rect.left > 360) left = rect.left - 340;
+      else if (window.innerWidth - rect.right > 360) left = rect.right + 20;
+      else left = rect.left + rect.width / 2 - 160;
+    }
   }
   return <>
     {rect && <div class="tour-ring" style={{ left: rect.left - 4, top: rect.top - 4, width: rect.width + 8, height: rect.height + 8 }} />}

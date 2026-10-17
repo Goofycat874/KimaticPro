@@ -31,7 +31,7 @@ function Group(props: { label: string; children: ComponentChildren }) {
   );
 }
 
-export function ShapeGallery(props: { onPick?: () => void }) {
+export function ShapeGallery(props: { onPick?: () => void; onDrag?: (dragging: boolean) => void }) {
   const cats: ShapeCategory[] = ['Basic', 'Fun', 'Mechanical'];
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   useEffect(() => {
@@ -53,7 +53,8 @@ export function ShapeGallery(props: { onPick?: () => void }) {
           <div class="gallery-grid">
             {SHAPES.filter((s) => s.category === cat).map((s) => (
               <div key={s.id} class="shape-card" draggable
-                onDragStart={(e) => { e.dataTransfer!.setData('text/kimatic-shape', s.id); e.dataTransfer!.effectAllowed = 'copy'; props.onPick?.(); }}
+                onDragStart={(e) => { e.dataTransfer!.setData('text/kimatic-shape', s.id); e.dataTransfer!.effectAllowed = 'copy'; props.onDrag?.(true); }}
+                onDragEnd={() => { props.onDrag?.(false); props.onPick?.(); }}
                 onClick={() => { addShape(s.id); props.onPick?.(); }}
                 data-tip-title={s.label} data-tip-desc={`${s.description} Click to add, or drag into the scene.`}>
                 {thumbs[s.id] ? <img src={thumbs[s.id]} alt="" /> : <div style={{ width: 58, height: 58 }} />}
@@ -68,18 +69,35 @@ export function ShapeGallery(props: { onPick?: () => void }) {
   );
 }
 
+/** Ribbon menus open in fixed position so the scrolling ribbon never clips them. */
+function useAnchor(ref: { current: HTMLElement | null }, width: number) {
+  const [pos, setPos] = useState({ left: 0, top: 0 });
+  const place = () => {
+    const r = ref.current!.getBoundingClientRect();
+    setPos({ left: Math.max(8, Math.min(r.left, window.innerWidth - width - 8)), top: r.bottom + 6 });
+  };
+  return { pos, place };
+}
+
 function ShapesButton() {
   const [open, setOpen] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useClickOutside(ref, () => setOpen(false), open);
+  const { pos, place } = useAnchor(ref, 550);
   return (
     <div class="menu-wrap" ref={ref} data-tour="shapes">
-      <button class={`tool hero ${open ? 'active' : ''}`} onClick={() => setOpen(!open)}
+      <button class={`tool hero ${open ? 'active' : ''}`} onClick={() => { place(); setOpen(!open); }}
         data-tip-title="Shapes" data-tip-desc="Every ready-made shape: boxes, gears, stars, hearts, text and more.">
         <span class="tool-icon"><Shapes size={19} /></span>
         <span class="tool-label">Shapes <ChevronDown size={10} /></span>
       </button>
-      {open && <div class="dropdown"><ShapeGallery onPick={() => setOpen(false)} /></div>}
+      {open && (
+        // fade out (but keep mounted) while dragging so the drag isn't cancelled and the drop lands in the scene
+        <div class="dropdown" style={{ position: 'fixed', ...pos, opacity: dragging ? 0 : 1, pointerEvents: dragging ? 'none' : undefined }}>
+          <ShapeGallery onPick={() => setOpen(false)} onDrag={setDragging} />
+        </div>
+      )}
     </div>
   );
 }
@@ -88,16 +106,17 @@ function DropTool(props: { icon: any; label: string; desc: string; items: { labe
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useClickOutside(ref, () => setOpen(false), open);
+  const { pos, place } = useAnchor(ref, 240);
   const Icon = props.icon;
   return (
     <div class="menu-wrap" ref={ref}>
-      <button class={`tool ${open ? 'active' : ''}`} onClick={() => setOpen(!open)} data-tip-title={props.label} data-tip-desc={props.desc}>
+      <button class={`tool ${open ? 'active' : ''}`} onClick={() => { place(); setOpen(!open); }} data-tip-title={props.label} data-tip-desc={props.desc}>
         <span class="tool-icon"><Icon size={21} /></span>
         <span class="tool-label">{props.label}</span>
         <ChevronDown size={10} class="caret" />
       </button>
       {open && (
-        <div class="dropdown">
+        <div class="dropdown" style={{ position: 'fixed', ...pos }}>
           {props.items.map((it) => it.label === '-'
             ? <div class="menu-sep" />
             : <button key={it.label} class="menu-item" onClick={() => { setOpen(false); it.run(); }}>{it.label}</button>)}

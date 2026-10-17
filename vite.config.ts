@@ -6,6 +6,12 @@ export default defineConfig({
   build: {
     target: 'es2022',
     chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      output: {
+        // keep the big, rarely-changing engine libs in their own cacheable chunk
+        manualChunks: { three: ['three', 'three-bvh-csg', 'three-mesh-bvh'] },
+      },
+    },
   },
   test: {
     environment: 'node',
