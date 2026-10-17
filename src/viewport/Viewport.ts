@@ -27,6 +27,7 @@ interface BodyView {
 }
 
 const edgeCache = new WeakMap<THREE.BufferGeometry, THREE.BufferGeometry>();
+const NO_EDGES = new THREE.BufferGeometry();
 function edgesOf(g: THREE.BufferGeometry) {
   let e = edgeCache.get(g);
   if (!e) { e = featureEdges(g, 28); edgeCache.set(g, e); }
@@ -135,6 +136,7 @@ export class Viewport {
     this.gizmo.addEventListener('mouseDown', () => this.onGizmoStart());
     this.gizmo.addEventListener('objectChange', () => this.onGizmoChange());
     this.gizmo.addEventListener('mouseUp', () => this.onGizmoEnd());
+    this.applySnap();
 
     // overlays
     this.labels = document.createElement('div');
@@ -297,7 +299,10 @@ export class Viewport {
       if (v.mesh.geometry !== b.geometry) {
         v.mesh.geometry = b.geometry;
         v.cap.geometry = b.geometry;
-        v.edges.geometry = edgesOf(b.geometry);
+        // edge extraction is the slowest part of a live drag: wait until the drag pauses
+        const cached = edgeCache.get(b.geometry);
+        if (cached) v.edges.geometry = cached;
+        else { v.edges.geometry = NO_EDGES; this.queueEdges(); }
       }
       v.mesh.matrix.copy(b.matrix);
       v.edges.matrix.copy(b.matrix);
@@ -332,6 +337,16 @@ export class Viewport {
     }
     this.syncHighlight();
     this.invalidate();
+  }
+
+  private edgeTimer: ReturnType<typeof setTimeout> | null = null;
+  private queueEdges() {
+    if (this.edgeTimer) clearTimeout(this.edgeTimer);
+    this.edgeTimer = setTimeout(() => {
+      this.edgeTimer = null;
+      for (const v of this.views.values()) if (v.edges.geometry === NO_EDGES) v.edges.geometry = edgesOf(v.mesh.geometry);
+      this.invalidate();
+    }, 140);
   }
 
   private sectionPlane() {
