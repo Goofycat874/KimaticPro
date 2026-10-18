@@ -76,6 +76,10 @@ src/
 
 A design is a list of features. Evaluating them in order produces the bodies you see, so every earlier decision stays editable. Solid booleans use [three-bvh-csg](https://github.com/gkjohnson/three-bvh-csg); results are cached per input so dragging a hole around re-cuts only what changed.
 
+### Phones & tablets
+
+The layout adapts below 820 px wide: the ribbon becomes a swipeable strip, the Browser slides in from the left and Properties is a bottom sheet. One finger orbits (or draws, inside a sketch), two fingers pinch-zoom and pan, and press-and-hold opens the quick menu. KimaticPro is also a PWA: open it in Safari/Chrome and choose **Add to Home Screen** to install it with its own icon and offline support. For app-store builds the same `dist/` can be wrapped with [Capacitor](https://capacitorjs.com).
+
 ### Windows desktop
 
 The app is a dependency-free static bundle with no server, so it can be wrapped as a native Windows app (e.g. with [Tauri](https://tauri.app) or Electron) without changes to the engine. File access currently uses browser downloads/uploads, which is the one layer to swap for native dialogs.

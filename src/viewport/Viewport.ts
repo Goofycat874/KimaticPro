@@ -151,7 +151,7 @@ export class Viewport {
 
     // gizmo
     this.gizmo = new TransformControls(this.persp, this.canvas);
-    this.gizmo.setSize(0.9);
+    this.gizmo.setSize(matchMedia('(pointer: coarse)').matches ? 1.35 : 0.9);
     this.gizmoHelper = this.gizmo.getHelper();
     this.scene.add(this.holder, this.gizmoHelper);
     this.holder.matrixAutoUpdate = false;
@@ -523,6 +523,10 @@ export class Viewport {
     this.controls.mouseButtons = mode === 'sketch'
       ? { LEFT: null as any, MIDDLE: M.PAN, RIGHT: M.ROTATE }
       : { LEFT: M.ROTATE, MIDDLE: M.PAN, RIGHT: M.PAN };
+    // touch: one finger orbits (or draws, in a sketch); two fingers pinch-zoom and pan
+    this.controls.touches = mode === 'sketch'
+      ? { ONE: null as any, TWO: THREE.TOUCH.DOLLY_PAN }
+      : { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
   }
 
   private onModeChange(mode: AppState['mode'], prev: AppState['mode']) {
@@ -638,8 +642,20 @@ export class Viewport {
 
   private bindEvents() {
     const c = this.canvas;
+    let longPress: ReturnType<typeof setTimeout> | null = null;
+    const cancelLongPress = () => { if (longPress) { clearTimeout(longPress); longPress = null; } };
     c.addEventListener('pointerdown', (e) => {
       this.down = { x: e.clientX, y: e.clientY, button: e.button, t: performance.now() };
+      // touch: press and hold opens the quick menu (the right-click of phones)
+      cancelLongPress();
+      if (e.pointerType === 'touch' && e.isPrimary && store.state.mode === 'model') {
+        longPress = setTimeout(() => {
+          longPress = null;
+          if (!this.down || this.gizmo.dragging) return;
+          this.down = null;
+          this.openContextMenu(e);
+        }, 550);
+      }
       store.state.contextMenu && store.set({ contextMenu: null });
       if (store.state.mode === 'sketch' && e.button === 0) {
         this.sketch.pointerDown(e);
@@ -648,6 +664,7 @@ export class Viewport {
     });
     c.addEventListener('pointermove', (e) => {
       const mode = store.state.mode;
+      if (longPress && this.down && Math.hypot(e.clientX - this.down.x, e.clientY - this.down.y) > 10) cancelLongPress();
       if (mode === 'sketch') { this.sketch.pointerMove(e); return; }
       if (e.buttons) return;
       if (mode === 'pick-plane') { this.hoverPlanes(e); return; }
@@ -661,9 +678,11 @@ export class Viewport {
       }
     });
     c.addEventListener('pointerup', (e) => {
+      cancelLongPress();
       const d = this.down;
       this.down = null;
-      const click = !!d && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 5 && performance.now() - d.t < 600;
+      const slop = e.pointerType === 'mouse' ? 5 : 12;
+      const click = !!d && Math.hypot(e.clientX - d.x, e.clientY - d.y) < slop && performance.now() - d.t < 600;
       if (store.state.mode === 'sketch') {
         this.sketch.pointerUp(e, click);
         this.controls.enabled = true;
@@ -674,6 +693,7 @@ export class Viewport {
       if (d.button !== 0 || this.gizmo.dragging || (this.gizmo as any).axis) return;
       this.onClick(e);
     });
+    c.addEventListener('pointercancel', () => { cancelLongPress(); this.down = null; });
     c.addEventListener('pointerleave', () => {
       if (this.hoverId) { this.hoverId = null; this.syncHighlight(); }
     });

@@ -10,8 +10,8 @@ function MenuButton(props: { label: any; items: (string | '-')[]; align?: 'right
   const ref = useRef<HTMLDivElement>(null);
   useClickOutside(ref, () => setOpen(false), open);
   return (
-    <div class="menu-wrap" ref={ref}>
-      <button class={`icon-btn labelled ${props.cls ?? ''} ${open ? 'active' : ''}`} onClick={() => setOpen(!open)} data-tip-title={props.tipTitle} data-tip-desc={props.tipDesc}>
+    <div class={`menu-wrap ${props.cls ?? ''}`} ref={ref}>
+      <button class={`icon-btn labelled ${open ? 'active' : ''}`} onClick={() => setOpen(!open)} data-tip-title={props.tipTitle} data-tip-desc={props.tipDesc}>
         {props.label}
       </button>
       {open && (
@@ -49,15 +49,18 @@ export function TopBar() {
         <div class="brand-mark">K</div>
         <div class="brand-name">Kimatic<span>Pro</span></div>
       </div>
-      <MenuButton label={<><Menu size={16} /> File <ChevronDown size={13} /></>}
+      <MenuButton cls="mobile-only" label={<Menu size={18} />}
+        items={['file.new', 'file.open', 'file.save', 'file.import', '-', 'print.check', 'export.3mf', 'export.stl', 'export.glb', 'export.png', '-',
+          'edit.duplicate', 'edit.delete', 'edit.selectAll', '-', 'modify.params', 'view.home', 'view.fit', 'view.ortho', 'view.grid', 'view.showAll', 'view.theme', '-', 'help.tour']} />
+      <MenuButton cls="desktop-only" label={<><Menu size={16} /> File <ChevronDown size={13} /></>}
         items={['file.new', 'file.open', 'file.save', '-', 'file.import', '-', 'print.check', 'export.3mf', 'export.stl', 'export.obj', 'export.glb', 'export.png']} />
-      <MenuButton label={<>Edit <ChevronDown size={13} /></>}
+      <MenuButton cls="desktop-only" label={<>Edit <ChevronDown size={13} /></>}
         items={['edit.undo', 'edit.redo', '-', 'edit.copy', 'edit.paste', 'edit.duplicate', 'edit.delete', '-', 'edit.selectAll']} />
-      <MenuButton label={<>View <ChevronDown size={13} /></>}
+      <MenuButton cls="desktop-only" label={<>View <ChevronDown size={13} /></>}
         items={['view.home', 'view.fit', '-', 'view.top', 'view.front', 'view.right', 'view.ortho', '-', 'view.grid', 'inspect.ghosts', 'view.isolate', 'view.showAll', '-', 'view.theme']} />
-      <MenuButton label={<>Help <ChevronDown size={13} /></>}
+      <MenuButton cls="desktop-only" label={<>Help <ChevronDown size={13} /></>}
         items={['help.tour', 'help.shortcuts', 'help.palette', '-', 'help.beginner']} />
-      <div class="sep" style={{ width: 1, height: 22, background: 'var(--line)', margin: '0 4px' }} />
+      <div class="sep hide-mobile" style={{ width: 1, height: 22, background: 'var(--line)', margin: '0 4px' }} />
       <button class="icon-btn" disabled={!s.canUndo} onClick={() => store.undo()} data-tip-title={s.canUndo ? `Undo ${s.canUndo}` : 'Undo'} data-tip-key="Ctrl+Z"><Undo2 size={17} /></button>
       <button class="icon-btn" disabled={!s.canRedo} onClick={() => store.redo()} data-tip-title={s.canRedo ? `Redo ${s.canRedo}` : 'Redo'} data-tip-key="Ctrl+Y"><Redo2 size={17} /></button>
 
@@ -72,21 +75,21 @@ export function TopBar() {
       {s.dirty && <span class="dirty-dot" data-tip-title="Unsaved changes" data-tip-desc="Your work is auto-saved in this browser. Use Save to download a file." />}
       <div class="spacer" />
 
-      <button class="icon-btn labelled" onClick={() => store.set({ palette: true })} data-tip-title="Search commands" data-tip-desc="Find any tool by name." data-tip-key="Ctrl+P">
+      <button class="icon-btn labelled hide-mobile" onClick={() => store.set({ palette: true })} data-tip-title="Search commands" data-tip-desc="Find any tool by name." data-tip-key="Ctrl+P">
         <Search size={15} /> <span style={{ color: 'var(--text-3)' }}>Search tools…</span> <Kbd k="Ctrl+P" />
       </button>
-      <button class={`icon-btn labelled ${s.beginner ? 'active' : ''}`} onClick={() => runCmd('help.beginner')}
+      <button class={`icon-btn labelled hide-mobile ${s.beginner ? 'active' : ''}`} onClick={() => runCmd('help.beginner')}
         data-tip-title={s.beginner ? 'Beginner mode is on' : 'Pro mode is on'} data-tip-desc={cmd('help.beginner').desc}>
         {s.beginner ? 'Beginner' : 'Pro'}
       </button>
-      <button class="icon-btn" onClick={() => togglePanel('left')} data-tip-title="Toggle browser panel"><PanelLeft size={17} /></button>
-      <button class="icon-btn" onClick={() => togglePanel('right')} data-tip-title="Toggle properties panel"><PanelRight size={17} /></button>
+      <button class="icon-btn hide-mobile" onClick={() => togglePanel('left')} data-tip-title="Toggle browser panel"><PanelLeft size={17} /></button>
+      <button class="icon-btn hide-mobile" onClick={() => togglePanel('right')} data-tip-title="Toggle properties panel"><PanelRight size={17} /></button>
       <button class="icon-btn" onClick={() => runCmd('view.theme')} data-tip-title="Dark / light theme">{s.theme === 'dark' ? <Moon size={17} /> : <Sun size={17} />}</button>
-      <button class="icon-btn" onClick={() => store.set({ dialog: 'about' })} data-tip-title="About KimaticPro"><CircleQuestionMark size={17} /></button>
+      <button class="icon-btn hide-mobile" onClick={() => store.set({ dialog: 'about' })} data-tip-title="About KimaticPro"><CircleQuestionMark size={17} /></button>
       <button class="btn primary small" onClick={() => runCmd('print.check')} data-tip-title="Print it" data-tip-desc="Check your design is printable, then export a 3MF or STL for your slicer." data-tip-key="P">
-        <Download size={14} /> Print / Export
+        <Download size={14} /> <span class="btn-text">Print / Export</span>
       </button>
-      <button class="btn small" onClick={() => runCmd('file.save')} data-tip-title="Save design" data-tip-key="Ctrl+S"><Save size={14} /> Save</button>
+      <button class="btn small" onClick={() => runCmd('file.save')} data-tip-title="Save design" data-tip-key="Ctrl+S"><Save size={14} /> <span class="btn-text">Save</span></button>
     </header>
   );
 }

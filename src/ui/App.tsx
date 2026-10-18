@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'preact/hooks';
-import { useStore } from './hooks';
+import { useIsMobile, useStore } from './hooks';
+import { store } from '../core/store';
 import { TopBar } from './TopBar';
 import { Ribbon } from './Ribbon';
 import { Browser } from './Browser';
@@ -12,7 +13,8 @@ import { TooltipLayer } from './controls';
 import type { Viewport } from '../viewport/Viewport';
 
 export function App({ viewport }: { viewport: Viewport }) {
-  const s = useStore((s) => ({ theme: s.theme, beginner: s.beginner }));
+  const s = useStore((s) => ({ theme: s.theme, beginner: s.beginner, sheet: s.sheet }));
+  const mobile = useIsMobile();
   const host = useRef<HTMLDivElement>(null);
   useEffect(() => { host.current?.prepend(viewport.el); }, []);
   useEffect(() => {
@@ -20,7 +22,7 @@ export function App({ viewport }: { viewport: Viewport }) {
     viewport.applyTheme();
   }, [s.theme]);
   return (
-    <div class={`app ${s.beginner ? 'beginner' : 'pro'}`}>
+    <div class={`app ${s.beginner && !mobile ? 'beginner' : 'pro'} ${mobile ? 'mobile' : ''} ${mobile && s.sheet ? `show-${s.sheet}` : ''}`}>
       <TopBar />
       <Ribbon />
       <div class="main">
@@ -29,6 +31,7 @@ export function App({ viewport }: { viewport: Viewport }) {
           <ViewportOverlay />
         </div>
         <Inspector />
+        {mobile && s.sheet && <div class="sheet-backdrop" onClick={() => store.set({ sheet: null })} />}
       </div>
       <Timeline />
       <StatusBar />

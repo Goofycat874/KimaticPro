@@ -4,6 +4,7 @@ import {
   Box, PenLine, Copy, ArrowDownToLine, EyeOff, Trash2, Lightbulb, TriangleAlert, Pencil, ArrowUpFromLine, RotateCw,
   SquaresUnite, SquaresSubtract, SquaresIntersect, Repeat, FlipHorizontal2, Move, Upload, Ruler, Sparkles, Orbit, CircleOff,
   Blend, Spline, SquareSplitVertical, ArrowUp, ArrowDown,
+  X,
 } from 'lucide-preact';
 import { store } from '../core/store';
 import * as A from '../core/actions';
@@ -702,7 +703,7 @@ export function Inspector() {
   } else content = <DesignInspector />;
   return (
     <aside class="panel right" data-tour="inspector">
-      <div class="panel-head">Properties</div>
+      <div class="panel-head">Properties<span class="spacer" /><button class="mini-btn mobile-only" onClick={() => store.set({ sheet: null })} aria-label="Close"><X size={16} /></button></div>
       <div class="panel-body">{content}</div>
     </aside>
   );

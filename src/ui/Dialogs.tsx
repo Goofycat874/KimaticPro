@@ -353,7 +353,7 @@ export function ParamsDialog() {
                 <input key={`n${i}`} class={`text-input ${bad ? 'bad' : ''}`} value={r.name} onInput={(e) => set(i, { name: (e.currentTarget as HTMLInputElement).value.trim() })} onKeyDown={(e) => e.stopPropagation()} placeholder="name" />,
                 <input key={`e${i}`} class={`text-input mono ${err ? 'bad' : ''}`} value={r.expr} onInput={(e) => set(i, { expr: (e.currentTarget as HTMLInputElement).value })} onKeyDown={(e) => e.stopPropagation()} placeholder="e.g. 40 or width / 2" />,
                 <div key={`v${i}`} class="pv" title={err}>{err ? '⚠ ' + err : Number.isFinite(live.vars[r.name]) ? `${+live.vars[r.name].toFixed(4)}` : '—'}</div>,
-                <input key={`c${i}`} class="text-input" value={r.comment ?? ''} onInput={(e) => set(i, { comment: (e.currentTarget as HTMLInputElement).value })} onKeyDown={(e) => e.stopPropagation()} placeholder={usage(r.name) ? `used ${usage(r.name)}×` : 'optional'} />,
+                <input key={`c${i}`} class="text-input pc" value={r.comment ?? ''} onInput={(e) => set(i, { comment: (e.currentTarget as HTMLInputElement).value })} onKeyDown={(e) => e.stopPropagation()} placeholder={usage(r.name) ? `used ${usage(r.name)}×` : 'optional'} />,
                 <button key={`d${i}`} class="mini-btn" onClick={() => setRows(rows.filter((_, j) => j !== i))} data-tip-title="Delete parameter"><X size={14} /></button>,
               ];
             })}

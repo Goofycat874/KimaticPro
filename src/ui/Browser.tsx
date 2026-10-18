@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { ChevronDown, ChevronRight, Eye, EyeOff, PenLine, Pencil, Ghost, Boxes, Grid3x3, Trash2 } from 'lucide-preact';
+import { ChevronDown, ChevronRight, Eye, EyeOff, PenLine, Pencil, Ghost, Boxes, Grid3x3, Trash2, X } from 'lucide-preact';
 import { store } from '../core/store';
 import * as A from '../core/actions';
 import { featureOf } from '../core/evaluator';
@@ -43,7 +43,7 @@ export function Browser() {
 
   return (
     <aside class="panel left" data-tour="browser">
-      <div class="panel-head">Browser</div>
+      <div class="panel-head">Browser<span class="spacer" /><button class="mini-btn mobile-only" onClick={() => store.set({ sheet: null })} aria-label="Close"><X size={16} /></button></div>
       <div class="panel-body">
         <Section title="Bodies" icon={Boxes} count={s.bodies.length}>
           {s.bodies.length === 0 && <div class="tree-empty">No bodies yet. Add a shape from the <b>Shapes</b> menu or draw a sketch.</div>}

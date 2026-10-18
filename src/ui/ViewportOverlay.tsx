@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import {
   House, Focus, Diamond, Grid3x3, Scissors, Eye, Move, Rotate3d, Scale3d, X, Check, PenLine, Ruler, Box as BoxIcon,
-  Copy, Trash2, ArrowDownToLine, EyeOff, Ghost, SquaresUnite, ScanEye, Palette, ArrowUpFromLine, Shapes, PanelBottom,
+  Copy, Trash2, ArrowDownToLine, EyeOff, Ghost, SquaresUnite, ScanEye, Palette, ArrowUpFromLine, Shapes, PanelBottom, Layers2, SlidersHorizontal,
 } from 'lucide-preact';
 import { store } from '../core/store';
 import * as A from '../core/actions';
@@ -32,7 +32,7 @@ function NavBar() {
       <NavBtn id="view.ortho" icon={Diamond} />
       <div class="sep" />
       {modes.map(([m, label, desc]) => (
-        <button key={m} class={`icon-btn ${dm === m ? 'active' : ''}`} onClick={() => store.set({ displayMode: m })} data-tip-title={label} data-tip-desc={desc}>
+        <button key={m} class={`icon-btn dm ${dm === m ? 'active' : ''}`} onClick={() => store.set({ displayMode: m })} data-tip-title={label} data-tip-desc={desc}>
           <DisplayIcon mode={m} />
         </button>
       ))}
@@ -195,9 +195,23 @@ function ContextMenu() {
   );
 }
 
+/** Phones: buttons that slide the Browser drawer and the Properties sheet in. */
+function MobileButtons() {
+  const s = useStore((s) => ({ sel: s.selection.length, feat: s.selectedFeature, mode: s.mode, bodies: s.result.bodies.length }));
+  return <>
+    <button class="fab fab-layers mobile-only" onClick={() => store.set({ sheet: 'browser' })} aria-label="Browser">
+      <Layers2 size={19} /><span class="fab-count">{s.bodies}</span>
+    </button>
+    <button class={`fab fab-props mobile-only ${s.sel || s.feat || s.mode === 'sketch' ? 'hot' : ''}`} onClick={() => store.set({ sheet: 'inspector' })} aria-label="Properties">
+      <SlidersHorizontal size={19} /><span>{s.mode === 'sketch' ? 'Sketch' : s.sel || s.feat ? 'Edit' : 'Design'}</span>
+    </button>
+  </>;
+}
+
 export function ViewportOverlay() {
   return (
     <div class="vp-overlay">
+      <MobileButtons />
       <GizmoBar />
       <Banner />
       <EmptyState />

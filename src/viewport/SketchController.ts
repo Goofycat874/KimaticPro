@@ -270,6 +270,11 @@ export class SketchController {
     if (e.button !== 0 || !wasClick) return;
     const tool = store.state.sketchTool;
     if (tool === 'select') return;
+    // touch has no hover, so the cursor is wherever the finger lifted
+    if (e.pointerType !== 'mouse') {
+      const raw = this.planeHit(e);
+      if (raw) this.cursor = this.snap(raw);
+    }
     this.click(this.cursor, e.detail >= 2);
   }
 

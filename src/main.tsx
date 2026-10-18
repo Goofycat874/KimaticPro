@@ -22,5 +22,12 @@ window.addEventListener('beforeunload', (e) => {
 
 render(<App viewport={viewport} />, document.getElementById('app')!);
 
+// offline + installable (production builds only; some hosts don't allow service workers)
+if (import.meta.env.PROD && 'serviceWorker' in navigator && location.protocol === 'https:') {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => { /* not available on this host */ });
+  });
+}
+
 // handy for debugging and for automation
 (window as any).kimatic = { store, viewport, run: runCmd };

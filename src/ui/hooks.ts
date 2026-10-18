@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef } from 'preact/hooks';
+import { useEffect, useReducer, useRef, useState } from 'preact/hooks';
 import { store, type AppState } from '../core/store';
 
 function shallowEqual(a: any, b: any) {
@@ -32,4 +32,17 @@ export function useClickOutside(ref: { current: HTMLElement | null }, onOutside:
     const t = setTimeout(() => document.addEventListener('pointerdown', h), 0);
     return () => { clearTimeout(t); document.removeEventListener('pointerdown', h); };
   }, [active]);
+}
+
+/** True on phone-sized screens (the layout switches to drawers and a bottom sheet). */
+export function useIsMobile(query = '(max-width: 820px)') {
+  const get = () => typeof matchMedia !== 'undefined' && matchMedia(query).matches;
+  const [m, setM] = useState(get);
+  useEffect(() => {
+    const mq = matchMedia(query);
+    const h = () => setM(mq.matches);
+    mq.addEventListener('change', h);
+    return () => mq.removeEventListener('change', h);
+  }, []);
+  return m;
 }

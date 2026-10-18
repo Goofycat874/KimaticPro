@@ -39,6 +39,8 @@ export interface AppState {
   toasts: Toast[];
   measure: { a: [number, number, number] | null; b: [number, number, number] | null };
   contextMenu: { x: number; y: number; bodyId: string | null } | null;
+  /** Phones: which side panel is slid in over the viewport. */
+  sheet: null | 'browser' | 'inspector';
   dirty: boolean;
   canUndo: string | null;
   canRedo: string | null;
@@ -105,6 +107,7 @@ export class Store {
       toasts: [],
       measure: { a: null, b: null },
       contextMenu: null,
+      sheet: null,
       dirty: false,
       canUndo: null,
       canRedo: null,
