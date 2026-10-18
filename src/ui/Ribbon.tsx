@@ -282,6 +282,7 @@ export function Ribbon() {
               <Tool id="edit.duplicate" />
             </Group>
             <Group label="Precise">
+              <Tool id="modify.drill" label="Hole" />
               <Tool id="modify.fillet" />
               <Tool id="modify.chamfer" />
               <Tool id="modify.shell" />

@@ -7,7 +7,7 @@ import {
   Check, Upload, ScanEye, Crosshair, Diamond, SquareDashed, Pill, Ghost, Printer, BedDouble, PanelBottom, LayoutGrid,
   TriangleAlert, ClipboardCheck, Blend, SquareSplitVertical, Variable, SquareRoundCorner, PackageOpen, Triangle, FileBox,
   DraftingCompass, RulerDimensionLine, CircleDot, MoveHorizontal, MoveVertical, Pause, TriangleRight, Equal, Target,
-  GitCommitHorizontal, Lock, EyeOff, FileText,
+  GitCommitHorizontal, Lock, EyeOff, FileText, Drill,
 } from 'lucide-preact';
 import type { ConstraintType } from '../core/types';
 import { store } from '../core/store';
@@ -84,6 +84,7 @@ export const COMMANDS: Command[] = [
   { id: 'modify.pattern', label: 'Pattern', group: 'Modify', icon: Repeat, desc: 'Repeat the selection in a row.', run: () => A.addPattern('linear'), enabled: hasSel, keywords: 'array repeat copy row' },
   { id: 'modify.circular', label: 'Circular pattern', group: 'Modify', icon: Orbit, desc: 'Repeat the selection around a circle.', run: () => A.addPattern('circular'), enabled: hasSel, keywords: 'array radial' },
   { id: 'modify.mirror', label: 'Mirror', group: 'Modify', icon: FlipHorizontal2, desc: 'Make a mirror-image copy across a plane.', key: 'M', run: () => A.addMirror(), enabled: hasSel, keywords: 'flip symmetry' },
+  { id: 'modify.drill', label: 'Drill hole', group: 'Modify', icon: Drill, desc: 'Click any face to drill a hole: plain, counterbored or countersunk, with standard metric screw sizes and heat-set insert presets.', run: () => A.beginHole(), active: () => store.state.mode === 'place-hole', enabled: () => store.state.result.bodies.length > 0, keywords: 'hole screw bolt counterbore countersink tap thread insert m3' },
   { id: 'modify.fillet', label: 'Fillet', group: 'Modify', icon: SquareRoundCorner, desc: 'Round off edges. Click the edges you want, set the radius, then Apply. With a body selected and no edges picked, every edge is rounded.', run: () => A.beginPick('fillet'), keywords: 'round radius blend edge' },
   { id: 'modify.chamfer', label: 'Chamfer', group: 'Modify', icon: Diamond, desc: 'Bevel edges with a flat 45° cut. Click the edges, set the distance, then Apply.', run: () => A.beginPick('chamfer'), keywords: 'bevel edge' },
   { id: 'modify.shell', label: 'Shell', group: 'Modify', icon: PackageOpen, desc: 'Hollow a body out with an even wall. Click the faces to remove (open), or just Apply to open the top.', run: () => A.beginPick('shell'), keywords: 'hollow wall thickness cup' },

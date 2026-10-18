@@ -5,6 +5,7 @@ import { bodyBounds, featureOf, trsMatrix, type EvalBody } from './evaluator';
 import { defaultParams, shapeById } from './primitives';
 import { nextColor } from './materials';
 import { STANDARD_PLANES, entityOutline, entityPoints } from './sketch';
+import { defaultHole } from './holes';
 import { ORIGIN, liveConstraints, measure, paramCount, refCircle, refLine, refPoint, solveSketch, withValues } from './constraints';
 import { evalExpr, usesNames } from './expr';
 import { arrangeOnBed, layFlatQuaternion } from './printing';
@@ -814,6 +815,22 @@ export function importSketchEntities(name: string, entities: SketchEntity[]) {
     viewApi.lookAtPlane?.(plane);
   }
   setTimeout(() => viewApi.fit?.(), 60);
+}
+
+/** Drill-hole tool: click faces to place holes. */
+export function beginHole() {
+  store.set({ mode: 'place-hole', selection: [], contextMenu: null });
+}
+
+export function addHole(bodyId: string, at: Vec3, normal: Vec3) {
+  const id = uid('h');
+  const prev = featureOf(store.doc, store.state.selectedFeature);
+  store.commit('Drill hole', (doc) => {
+    // repeat the last hole's size so a row of holes is quick
+    const base = defaultHole(id, bodyId, at, normal);
+    const h = prev?.type === 'hole' ? { ...prev, id, bodyId, at, normal, exprs: undefined } : base;
+    insertFeature(doc, { ...h, name: nextName(doc, 'Hole') });
+  }, { selectedFeature: id });
 }
 
 export function finishSketch() {

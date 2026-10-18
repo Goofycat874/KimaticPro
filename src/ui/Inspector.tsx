@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import {
   Box, PenLine, Copy, ArrowDownToLine, EyeOff, Trash2, Lightbulb, TriangleAlert, Pencil, ArrowUpFromLine, RotateCw,
   SquaresUnite, SquaresSubtract, SquaresIntersect, Repeat, FlipHorizontal2, Move, Upload, Ruler, Sparkles, Orbit, CircleOff,
-  Blend, Spline, SquareSplitVertical, ArrowUp, ArrowDown, SquareRoundCorner, PackageOpen, Triangle,
+  Blend, Spline, SquareSplitVertical, ArrowUp, ArrowDown, SquareRoundCorner, PackageOpen, Triangle, CircleDot, Drill,
   X,
 } from 'lucide-preact';
 import { store } from '../core/store';
@@ -18,6 +18,7 @@ import { MATERIALS, SWATCHES, materialById } from '../core/materials';
 import { computeArea, computeVolume, triangleCount } from '../core/geometry';
 import type { BodyOp, Feature, SketchConstraint, SketchEntity, TRS, Vec3 } from '../core/types';
 import { analyzeSketch, isDimension } from '../core/constraints';
+import { HOLE_PRESETS, presetById, withPreset } from '../core/holes';
 import { useStore } from './hooks';
 import { Field, NumberField, Segmented, Toggle, Vec3Field } from './controls';
 import { shapeThumbnail } from '../viewport/thumbnails';
@@ -39,6 +40,7 @@ const TYPE_META: Record<Feature['type'], { label: string; color: string; icon: a
   split: { label: 'Split', color: '#f43f5e', icon: SquareSplitVertical },
   fillet: { label: 'Fillet', color: '#eab308', icon: SquareRoundCorner },
   shell: { label: 'Shell', color: '#0d9488', icon: PackageOpen },
+  hole: { label: 'Hole', color: '#ef4444', icon: CircleDot },
   draft: { label: 'Draft', color: '#7c3aed', icon: Triangle },
 };
 export { TYPE_META };
@@ -394,6 +396,45 @@ function FeatureEditor({ f, withTransform = true }: { f: Feature; withTransform?
         <OperationEditor f={f} />
         {withTransform && <TransformEditor fid={f.id} t={f.transform} />}
       </>;
+    case 'hole': {
+      const presets = HOLE_PRESETS.filter((p) => p.group);
+      const groups = [...new Set(presets.map((p) => p.group))];
+      const current = HOLE_PRESETS.find((p) => p.label === f.label)?.id ?? '';
+      return <Section title="Hole">
+        <Field label="Body"><span>{bodyName(f.bodyId)}</span></Field>
+        <Field label="Standard" tip="Metric screw sizes. Pick one and every size below fills in; change any number to make it custom.">
+          <select class="select" value={current} onChange={(e) => {
+            const p = presetById(e.currentTarget.value);
+            if (p) edit(f.id, 'Hole size', (x) => Object.assign(x, withPreset(x, p)));
+          }}>
+            <option value="">Custom</option>
+            {groups.map((g) => <optgroup key={g} label={g}>{presets.filter((p) => p.group === g).map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}</optgroup>)}
+          </select>
+        </Field>
+        <Field label="Type">
+          <Segmented value={f.kind} onChange={(v) => edit(f.id, 'Hole type', (x) => { x.kind = v; x.label = undefined; })} options={[
+            { value: 'simple', label: 'Plain' }, { value: 'counterbore', label: 'C-bore', tip: 'A wider step at the top so a cap-screw head sits flush.' },
+            { value: 'countersink', label: 'C-sink', tip: 'A cone at the top for flat-head screws.' },
+          ]} />
+        </Field>
+        <Field label="Diameter"><PNum f={f} path="diameter" title="Hole diameter" unit="mm" label="⌀" min={0.1} max={1000} step={0.1} after={(x) => { x.label = undefined; }} /></Field>
+        <Field label="Through all" tip="Go all the way through the body."><Toggle value={f.depth === 0} onChange={(v) => edit(f.id, 'Hole depth', (x) => { x.depth = v ? 0 : Math.max(1, x.diameter * 2); })} /></Field>
+        {f.depth > 0 && <>
+          <Field label="Depth"><PNum f={f} path="depth" title="Hole depth" unit="mm" label="↧" min={0.1} max={10000} step={0.5} /></Field>
+          <Field label="Drill point" tip="A 118° cone at the bottom, like a real drill leaves."><Toggle value={f.drillPoint} onChange={(v) => edit(f.id, 'Drill point', (x) => { x.drillPoint = v; })} /></Field>
+        </>}
+        {f.kind === 'counterbore' && <>
+          <Field label="C-bore ⌀"><PNum f={f} path="cbDiameter" title="Counterbore diameter" unit="mm" label="⌀" min={0.1} max={1000} step={0.1} /></Field>
+          <Field label="C-bore depth"><PNum f={f} path="cbDepth" title="Counterbore depth" unit="mm" label="↧" min={0.1} max={1000} step={0.1} /></Field>
+        </>}
+        {f.kind === 'countersink' && <>
+          <Field label="C-sink ⌀"><PNum f={f} path="csDiameter" title="Countersink diameter" unit="mm" label="⌀" min={0.1} max={1000} step={0.1} /></Field>
+          <Field label="C-sink angle"><PNum f={f} path="csAngle" title="Countersink angle" unit="°" label="∠" min={30} max={170} step={1} /></Field>
+        </>}
+        <Field label="Position" stack><Vec3Field value={f.at} onChange={(v, live) => edit(f.id, 'Move hole', (x) => { x.at = v; }, live)} onCommit={commit('Move hole')} /></Field>
+        <div class="row-actions"><button class="btn small" onClick={() => A.beginHole()}><Drill size={13} /> Drill another</button></div>
+      </Section>;
+    }
     case 'fillet':
     case 'shell':
     case 'draft': {

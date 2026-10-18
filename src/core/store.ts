@@ -1,7 +1,7 @@
 import { evaluate, type EvalResult } from './evaluator';
 import type { ConstraintType, DesignDoc } from './types';
 
-export type Mode = 'model' | 'pick-plane' | 'sketch' | 'measure' | 'lay-flat' | 'pick';
+export type Mode = 'model' | 'pick-plane' | 'sketch' | 'measure' | 'lay-flat' | 'pick' | 'place-hole';
 
 /** Edge/face picking for precise tools (fillet, chamfer, shell, draft). */
 export interface PickState {

@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import {
+  Drill,
   House, Focus, Diamond, Grid3x3, Scissors, Eye, Move, Rotate3d, Scale3d, X, Check, PenLine, Ruler, Box as BoxIcon,
   Copy, Trash2, ArrowDownToLine, EyeOff, Ghost, SquaresUnite, ScanEye, Palette, ArrowUpFromLine, Shapes, PanelBottom, Layers2, SlidersHorizontal, SquareRoundCorner,
 } from 'lucide-preact';
@@ -111,6 +112,15 @@ function Banner() {
       <div class="banner">
         <PanelBottom size={17} style={{ color: 'var(--accent)' }} />
         <div><div class="b-title">Lay flat</div><div class="b-sub">Click the face that should sit on the print bed</div></div>
+        <button class="btn small" onClick={() => store.set({ mode: 'model' })}>Done</button>
+      </div>
+    );
+  }
+  if (s.mode === 'place-hole') {
+    return (
+      <div class="banner">
+        <Drill size={17} style={{ color: '#ef4444' }} />
+        <div><div class="b-title">Drill holes</div><div class="b-sub">Click a face to drill — set size and type on the right · Esc when done</div></div>
         <button class="btn small" onClick={() => store.set({ mode: 'model' })}>Done</button>
       </div>
     );

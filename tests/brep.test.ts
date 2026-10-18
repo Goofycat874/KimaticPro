@@ -154,3 +154,27 @@ describe('exact mass properties', () => {
     expect(q.inertia[1][1]).toBeCloseTo(2 * ((m / 12) * (10 ** 2 + 30 ** 2) + m * 400), 2);
   });
 });
+
+describe('hole tool', () => {
+  const box: Feature = { id: 'b', type: 'primitive', name: 'Box', shape: 'box', params: { width: 20, height: 20, depth: 20, round: 0 }, transform: identityTRS(), op: 'new', targets: [], appearance: app };
+  const hole = (extra: any): Feature => ({ id: 'h', type: 'hole', name: 'Hole', bodyId: 'b', at: [0, 20, 0], normal: [0, 1, 0], kind: 'simple', diameter: 3.4, depth: 0, cbDiameter: 6.5, cbDepth: 3.4, csDiameter: 6.7, csAngle: 90, drillPoint: true, ...extra } as Feature);
+  const vols = (f: Feature) => {
+    const m = runFeatures(meshKernel, doc([box, f])), b = runFeatures(brepKernel, doc([box, f]));
+    expect(b.errors).toEqual({});
+    return [computeVolume(m.bodies[0].solid as any, m.bodies[0].matrix), bvol(b.bodies[0])];
+  };
+  it('drills through, counterbores and countersinks exactly', () => {
+    const r = 1.7;
+    const [m1, b1] = vols(hole({}));
+    expect(b1).toBeCloseTo(8000 - Math.PI * r * r * 20, 2);
+    expect(Math.abs(m1 - b1) / b1).toBeLessThan(0.01);
+    const [, b2] = vols(hole({ kind: 'counterbore' }));
+    expect(b2).toBeCloseTo(8000 - Math.PI * r * r * (20 - 3.4) - Math.PI * 3.25 * 3.25 * 3.4, 2);
+    const [, b3] = vols(hole({ kind: 'countersink' }));
+    expect(b3).toBeLessThan(b1);
+    // a blind hole with a drill point removes a cone at the bottom
+    const [, b4] = vols(hole({ depth: 8 }));
+    const tip = r * Math.tan((31 * Math.PI) / 180);
+    expect(b4).toBeCloseTo(8000 - Math.PI * r * r * 8 - (Math.PI * r * r * tip) / 3, 2);
+  });
+});

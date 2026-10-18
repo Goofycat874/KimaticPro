@@ -3,6 +3,7 @@ import type { Appearance, BodyOp, DesignDoc, Feature, PlaneDef, SketchEntity, TR
 import type { Kernel, Placed } from './kernel';
 import { planeMatrix } from './sketch';
 import { solveSketch, withValues } from './constraints';
+import { holeProfile } from './holes';
 import { evalExpr, resolveParams, setPath } from './expr';
 
 // The timeline engine: replays features in order and keeps track of which body is
@@ -210,6 +211,27 @@ export function runFeatures<S>(kernel: Kernel<S>, doc: DesignDoc): CoreResult<S>
           if (!b) throw new Error('The body for this step no longer exists.');
           const r = kernel.modify(b, f);
           bodies.set(f.bodyId, { ...b, ...r, editableFeatureId: null, lastFeatureId: f.id });
+          outputs[f.id] = [];
+          break;
+        }
+        case 'hole': {
+          const b = bodies.get(f.bodyId);
+          if (!b) throw new Error('The body for this hole no longer exists.');
+          const n = new THREE.Vector3(...f.normal).normalize();
+          if (n.lengthSq() < 0.5) throw new Error('This hole has no direction.');
+          // cutter frame: local Y along the face normal, sitting on the clicked point
+          const x = new THREE.Vector3().crossVectors(Math.abs(n.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0), n).normalize();
+          const z = new THREE.Vector3().crossVectors(x, n);
+          const frame = new THREE.Matrix4().makeBasis(x, n, z).setPosition(...f.at);
+          const size = kernel.bounds(b).getSize(new THREE.Vector3()).length();
+          const through = Math.ceil(size + 2);
+          const profile = holeProfile(f, through);
+          const key = hash(`hole|${JSON.stringify(profile)}`);
+          const cutter = kernel.revolve({ axis: 'y', angle: 360 } as any, [{ id: 'h', kind: 'polyline', points: profile, closed: true }], key);
+          const tool: Placed<S> = { solid: cutter, key, matrix: frame };
+          frames[f.id] = frame.clone();
+          ghosts.push({ featureId: f.id, bodyId: f.bodyId, op: 'cut', ...tool });
+          bodies.set(f.bodyId, { ...b, ...kernel.boolean(b, tool, 'cut'), editableFeatureId: null, lastFeatureId: f.id });
           outputs[f.id] = [];
           break;
         }

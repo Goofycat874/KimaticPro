@@ -217,6 +217,29 @@ export interface DraftFeature extends FeatureBase {
   angle: number;
 }
 
+export type HoleKind = 'simple' | 'counterbore' | 'countersink';
+
+/** A drilled hole on a face: placed at a point, going in against the face normal. */
+export interface HoleFeature extends FeatureBase {
+  type: 'hole';
+  bodyId: string;
+  at: Vec3;
+  /** Outward face normal at `at`. */
+  normal: Vec3;
+  kind: HoleKind;
+  diameter: number;
+  /** 0 = all the way through. */
+  depth: number;
+  cbDiameter: number;
+  cbDepth: number;
+  csDiameter: number;
+  csAngle: number;
+  /** Pointed bottom like a real drill (blind holes only). */
+  drillPoint: boolean;
+  /** Preset label shown in drawings and the inspector, e.g. "M3 clearance". */
+  label?: string;
+}
+
 export interface SplitFeature extends FeatureBase {
   type: 'split';
   bodyId: string;
@@ -235,6 +258,7 @@ export interface ImportFeature extends FeatureBase {
 }
 
 export type Feature =
+  | HoleFeature
   | PrimitiveFeature
   | SketchFeature
   | ExtrudeFeature

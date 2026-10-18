@@ -4,7 +4,7 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { store, type AppState } from '../core/store';
 import {
-  addShape, createSketch, ensureEditable, layFlat, select, selectFeature, setTransform, viewApi, bodyById,
+  addShape, addHole, createSketch, ensureEditable, layFlat, select, selectFeature, setTransform, viewApi, bodyById,
 } from '../core/actions';
 import { bodyBounds, featureOf, type EvalBody, type EvalGhost } from '../core/evaluator';
 import { materialById } from '../core/materials';
@@ -555,9 +555,9 @@ export class Viewport {
   private onModeChange(mode: AppState['mode'], prev: AppState['mode']) {
     this.setMouseMode(mode);
     this.planePicker.visible = mode === 'pick-plane';
-    this.canvas.style.cursor = mode === 'measure' || mode === 'pick-plane' || mode === 'lay-flat' || mode === 'pick' ? 'crosshair' : mode === 'sketch' ? 'crosshair' : '';
+    this.canvas.style.cursor = mode === 'measure' || mode === 'pick-plane' || mode === 'lay-flat' || mode === 'pick' || mode === 'place-hole' ? 'crosshair' : mode === 'sketch' ? 'crosshair' : '';
     if (prev === 'pick') this.pick.reset();
-    if (mode !== 'lay-flat') this.flatMarker.visible = false;
+    if (mode !== 'lay-flat' && mode !== 'place-hole') this.flatMarker.visible = false;
     if (prev === 'sketch') this.sketch.cancel();
     if (prev === 'measure') store.set({ measure: { a: null, b: null } });
     if (mode === 'pick-plane') this.scalePlanePicker();
@@ -694,7 +694,7 @@ export class Viewport {
       if (mode === 'pick-plane') { this.hoverPlanes(e); return; }
       if (mode === 'pick') { this.pick.move(e); return; }
       const hit = this.pickBody(e);
-      if (mode === 'lay-flat') this.showFlatMarker(hit);
+      if (mode === 'lay-flat' || mode === 'place-hole') this.showFlatMarker(hit);
       const id = (hit?.object.userData.bodyId as string) ?? null;
       if (id !== this.hoverId) {
         this.hoverId = id;
@@ -776,6 +776,19 @@ export class Viewport {
       const hit = this.pickBody(e);
       const id = hit?.object.userData.bodyId as string | undefined;
       if (hit?.face && id) layFlat(id, hit.face.normal.clone().transformDirection(hit.object.matrixWorld));
+      return;
+    }
+    if (mode === 'place-hole') {
+      const hit = this.pickBody(e);
+      const id = hit?.object.userData.bodyId as string | undefined;
+      if (!hit?.face || !id) return;
+      const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize();
+      const p = hit.point.clone();
+      // on faces square to an axis, the in-face coordinates snap to the grid
+      const s = store.state.snap;
+      if (s) for (const k of ['x', 'y', 'z'] as const) if (Math.abs(n[k]) < 1e-6) p[k] = Math.round(p[k] / s) * s;
+      const r = (v: number) => Math.round(v * 1e4) / 1e4;
+      addHole(id, [r(p.x), r(p.y), r(p.z)], [r(n.x), r(n.y), r(n.z)]);
       return;
     }
     if (mode === 'measure') {
