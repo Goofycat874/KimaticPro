@@ -1,6 +1,20 @@
 # KimaticPro
 
-**Free, open-source 3D CAD for everyone.** KimaticPro runs in your browser and is simple enough for a kid's first 3D print, yet built on the same ideas as professional tools: a parametric feature timeline, sketch-based modelling and solid booleans.
+**Free, open-source 3D CAD for everyone.** KimaticPro runs in your browser and is simple enough for a kid's first 3D print, yet built like the professional tools: a parametric feature timeline, fully constrained sketches, an exact B-rep geometry kernel (OpenCascade), STEP in and out, and real engineering drawings.
+
+### For professionals
+
+- 🎯 **Exact solids** — every shape, sketch, boolean and fillet is computed as a true B-rep by [OpenCascade](https://dev.opencascade.org) (via [replicad](https://replicad.xyz)) in a background worker. You get an instant preview while dragging, then the exact result. The status bar shows which you're looking at.
+- 📏 **Constrained sketches** — coincident, horizontal, vertical, parallel, perpendicular, equal, tangent, concentric, midpoint, point-on-curve, symmetric and lock, plus driving dimensions (length, distance, horizontal/vertical, radius, diameter, angle). A least-squares solver keeps everything satisfied while you drag; geometry turns white when fully constrained and the sketch reports its remaining degrees of freedom or conflicts. Dimensions accept parameters (`width / 2`) and re-solve when parameters change.
+- ✂️ **Sketch editing** — 3-point arcs, construction lines, trim, round corner, offset and mirror. Lines and arcs that meet end to end form closed profiles.
+- 🟠 **Fillet, chamfer, shell, draft** — click the exact edges or faces you want. Each is an editable timeline step.
+- 🔩 **Hole tool** — click a face to drill plain, counterbored or countersunk holes, through or blind with a drill point. ISO metric presets: clearance, tap drill, socket-head counterbore, 90° countersink, heat-set inserts.
+- 📄 **Technical drawings** — front/top/right/isometric views from exact hidden-line projection, third or first angle, standard scales, overall dimensions, hole callouts (`2× Ø10`), centre marks and a title block. Save as vector **PDF**, **SVG**, or **DXF** at 1:1.
+- 🔁 **Interchange** — **STEP** import/export (exact solids for SolidWorks, Fusion, Onshape, FreeCAD, machine shops), **DXF** import into sketches (lines, polylines with bulges, arcs, circles, NURBS splines, ellipses, blocks) and 1:1 sketch DXF export for laser cutters and CNC.
+- ⚖️ **Mass properties** — exact volume, surface area, mass, centre of mass and inertia tensor with principal moments, per-body material densities.
+- 📐 **Units** — work in millimetres and type any unit into a size field: `2in`, `3/8"`, `1.5cm`, `0.1m`, `2ft`.
+
+### For everyone
 
 - 🧱 **Snap shapes together** — boxes, cylinders, spheres, cones, pyramids, tori, tubes, wedges, domes, capsules, prisms, stars, hearts, 3D text, gears and springs. Click to add or drag right where you want them.
 - 🕳️ **Holes in one click** — set any shape to *Hole* and it cuts whatever it touches. You can still move and resize the hole afterwards.
@@ -45,7 +59,7 @@ The production build is a static site — host `dist/` anywhere (GitHub Pages, N
 | Search every tool | `Ctrl+P` |
 | All shortcuts | `?` |
 
-In sketches: `L` line, `R` rectangle, `C` circle, `P` polygon, `V` select, `Enter` finish, `Esc` cancel. Type numbers while drawing for exact dimensions.
+In sketches: `L` line, `R` rectangle, `C` circle, `A` arc, `P` polygon, `D` dimension, `T` trim, `X` construction, `V` select, `Enter` finish, `Esc` steps back (tool → selection → leave sketch). Type numbers while drawing for exact sizes — they become dimensions you can edit later. Snapping onto points joins them and level lines get Horizontal/Vertical constraints automatically.
 
 ## How it works
 
@@ -55,7 +69,14 @@ src/
     types.ts         design document: an ordered list of features (the timeline)
     evaluator.ts     replays features → solid bodies (cached, incremental)
     primitives.ts    parametric shape library
-    sketch.ts        sketch entities → closed profiles (with automatic holes)
+    sketch.ts        sketch entities → closed profiles (holes, joined lines + arcs)
+    constraints.ts   sketch constraint solver and degrees-of-freedom analysis
+    sketchEdit.ts    trim, round corner, offset, mirror
+    evalCore.ts      the timeline engine, shared by both geometry kernels
+    meshKernel.ts    fast mesh kernel for instant previews
+    holes.ts         hole presets and cutter profiles
+    drawingSheet.ts  drawing layout + SVG / PDF / DXF writers
+    dxf.ts           DXF import and sketch export
     revolve.ts       capped revolve builder
     loft.ts          loft and sweep builders
     hardware.ts      threads, bolts, nuts, screw holes, containers
@@ -66,6 +87,11 @@ src/
     store.ts         app state, undo/redo, autosave
     io.ts            STL / OBJ / GLB / PNG export, project files, mesh import
     templates.ts     starter designs
+  kernel/          exact geometry (OpenCascade) in a Web Worker
+    brep.ts          B-rep kernel: sketches, booleans, fillets, STEP
+    projection.ts    hidden-line views for drawings
+    massProps.ts     exact mass properties
+    worker.ts, client.ts, protocol.ts
   viewport/        Three.js rendering & interaction
     Viewport.ts      scene, camera, picking, gizmo, section, measure
     SketchController.ts  2D drawing tools with snapping and typed dimensions
@@ -74,7 +100,7 @@ src/
   ui/              Preact interface (ribbon, browser, inspector, timeline, dialogs)
 ```
 
-A design is a list of features. Evaluating them in order produces the bodies you see, so every earlier decision stays editable. Solid booleans use [three-bvh-csg](https://github.com/gkjohnson/three-bvh-csg); results are cached per input so dragging a hole around re-cuts only what changed.
+A design is a list of features. Evaluating them in order produces the bodies you see, so every earlier decision stays editable. The same timeline engine runs on two kernels: a fast mesh kernel ([three-bvh-csg](https://github.com/gkjohnson/three-bvh-csg)) for instant feedback, and an exact OpenCascade B-rep kernel in a Web Worker whose results replace the preview as soon as they're ready. Edges and faces are referenced by position on the model, so fillets and shells survive upstream edits. Both kernels are tested against each other for every shape and template.
 
 ### Phones & tablets
 
