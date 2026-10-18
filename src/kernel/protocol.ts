@@ -1,4 +1,7 @@
 import type { DesignDoc } from '../core/types';
+import type { ProjView, ViewName } from '../core/drawingSheet';
+
+export interface DrawingPayload { views: Record<string, ProjView>; skipped: string[]; names: string[]; materials: string[] }
 
 /** Display mesh for one body, produced by the precise kernel in the worker. */
 export interface MeshPayload {
@@ -45,7 +48,8 @@ export type Request =
   | { type: 'eval'; doc: DesignDoc }
   | { type: 'step'; doc: DesignDoc; ids: string[] | null }
   | { type: 'importStep'; text: string }
-  | { type: 'props'; doc: DesignDoc; ids: string[] };
+  | { type: 'props'; doc: DesignDoc; ids: string[] }
+  | { type: 'drawing'; doc: DesignDoc; ids: string[] | null; views: ViewName[] };
 
 export type Response =
   | { id: number; ok: true; data: any }

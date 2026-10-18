@@ -4,7 +4,8 @@ import opencascade from 'replicad-opencascadejs';
 import wasmUrl from 'replicad-opencascadejs/wasm?url';
 import { runFeatures, type CoreResult } from '../core/evalCore';
 import { brepKernel, exportStep, importStepText, solidGeometry, type BSolid } from './brep';
-import type { BodyPayload, EvalPayload, GhostPayload, MeshPayload, PropsPayload, Request } from './protocol';
+import type { BodyPayload, DrawingPayload, EvalPayload, GhostPayload, MeshPayload, PropsPayload, Request } from './protocol';
+import { projectBodies } from './projection';
 import { encodePositions } from '../core/geometry';
 import type { DesignDoc } from '../core/types';
 
@@ -97,6 +98,17 @@ async function handle(req: Request): Promise<any> {
       const step = await zUp.blobSTEP().text();
       zUp.delete();
       return { mesh: encodePositions(tri), step, faces };
+    }
+    case 'drawing': {
+      const r = evaluateDoc(req.doc);
+      const pick = r.bodies.filter((b) => b.visible && (!req.ids || req.ids.includes(b.id)));
+      const out: DrawingPayload = {
+        views: projectBodies(pick, req.views),
+        skipped: pick.filter((b) => b.solid.kind !== 'brep').map((b) => b.name),
+        names: pick.map((b) => b.name),
+        materials: [...new Set(pick.map((b) => b.appearance.material))],
+      };
+      return out;
     }
     case 'props': {
       const r = evaluateDoc(req.doc);

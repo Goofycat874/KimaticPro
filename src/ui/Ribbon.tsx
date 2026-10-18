@@ -359,6 +359,9 @@ export function Ribbon() {
               <Tool id="file.save" />
               <Tool id="file.import" label="Import" />
             </Group>
+            <Group label="Documentation">
+              <Tool id="output.drawing" label="Drawing" />
+            </Group>
             <Group label="Export">
               <Tool id="export.step" label="STEP" />
               <Tool id="export.3mf" label="3MF" />

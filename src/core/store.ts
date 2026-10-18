@@ -44,7 +44,7 @@ export interface AppState {
   section: { enabled: boolean; axis: 'x' | 'y' | 'z'; offset: number; flip: boolean };
   welcome: boolean;
   palette: boolean;
-  dialog: null | 'shortcuts' | 'about' | 'export' | 'tour' | 'print' | 'params';
+  dialog: null | 'shortcuts' | 'about' | 'export' | 'tour' | 'print' | 'params' | 'drawing';
   printerId: string;
   showBed: boolean;
   showOverhangs: boolean;

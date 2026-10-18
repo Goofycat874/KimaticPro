@@ -7,7 +7,7 @@ import {
   Check, Upload, ScanEye, Crosshair, Diamond, SquareDashed, Pill, Ghost, Printer, BedDouble, PanelBottom, LayoutGrid,
   TriangleAlert, ClipboardCheck, Blend, SquareSplitVertical, Variable, SquareRoundCorner, PackageOpen, Triangle, FileBox,
   DraftingCompass, RulerDimensionLine, CircleDot, MoveHorizontal, MoveVertical, Pause, TriangleRight, Equal, Target,
-  GitCommitHorizontal, Lock, EyeOff,
+  GitCommitHorizontal, Lock, EyeOff, FileText,
 } from 'lucide-preact';
 import type { ConstraintType } from '../core/types';
 import { store } from '../core/store';
@@ -42,6 +42,7 @@ export const COMMANDS: Command[] = [
   { id: 'export.stl', label: 'Export STL (3D print)', group: 'Export', icon: Download, desc: 'The standard file for 3D printers and slicers.', key: 'Ctrl+E', run: () => exportAs('stl'), keywords: 'print slicer cura prusa' },
   { id: 'export.3mf', label: 'Export 3MF (3D print)', group: 'Export', icon: Download, desc: 'The modern slicer format: exact millimetres, separate parts and colours. Best for Bambu, Prusa and Cura.', run: () => exportAs('3mf'), keywords: 'print slicer bambu orca prusa' },
   { id: 'export.step', label: 'Export STEP (CAD)', group: 'Export', icon: FileBox, desc: 'Exact solids for SolidWorks, Fusion, Onshape, FreeCAD and machine shops.', run: () => exportAs('step'), keywords: 'stp iso 10303 solidworks fusion onshape freecad cnc' },
+  { id: 'output.drawing', label: 'Technical drawing', group: 'Export', icon: FileText, desc: 'Make a 2D engineering drawing: front, top, side and 3D views with hidden lines, sizes and a title block. Save as PDF, SVG or DXF.', run: () => store.set({ dialog: 'drawing' }), enabled: () => store.state.result.bodies.length > 0, keywords: 'blueprint 2d plan pdf dxf orthographic views dimensions' },
   { id: 'export.obj', label: 'Export OBJ', group: 'Export', icon: Download, desc: 'Widely supported mesh format.', run: () => exportAs('obj') },
   { id: 'export.glb', label: 'Export GLB', group: 'Export', icon: Download, desc: 'glTF binary with colours — for games, AR and the web.', run: () => exportAs('glb'), keywords: 'gltf blender unity' },
   { id: 'export.png', label: 'Save image', group: 'Export', icon: Image, desc: 'Save a picture of the current view.', run: () => exportAs('png'), keywords: 'screenshot render picture' },

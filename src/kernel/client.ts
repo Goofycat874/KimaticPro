@@ -3,7 +3,8 @@ import { store } from '../core/store';
 import type { EvalBody, EvalResult } from '../core/evaluator';
 import { matKey } from '../core/evalCore';
 import type { DesignDoc } from '../core/types';
-import type { EvalPayload, MeshPayload, PropsPayload, Request, Response } from './protocol';
+import type { DrawingPayload, EvalPayload, MeshPayload, PropsPayload, Request, Response } from './protocol';
+import type { ViewName } from '../core/drawingSheet';
 
 export type KernelStatus = 'off' | 'loading' | 'ready' | 'busy' | 'error';
 
@@ -95,6 +96,12 @@ class KernelClient {
     await this.start();
     if (!this.available) throw new Error('STEP import needs the precise geometry engine, which could not load in this browser.');
     return this.call<{ mesh: string; step: string; faces: number }>({ type: 'importStep', text });
+  }
+
+  async drawing(doc: DesignDoc, ids: string[] | null, views: ViewName[]) {
+    await this.start();
+    if (!this.available) throw new Error('Drawings need the precise geometry engine, which could not load in this browser.');
+    return this.call<DrawingPayload>({ type: 'drawing', doc, ids, views });
   }
 
   async props(doc: DesignDoc, ids: string[]) {

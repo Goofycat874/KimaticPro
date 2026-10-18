@@ -9,6 +9,7 @@ import { Timeline } from './Timeline';
 import { StatusBar } from './StatusBar';
 import { ViewportOverlay } from './ViewportOverlay';
 import { About, CommandPalette, ParamsDialog, PrintDialog, Shortcuts, Toasts, Tour, Welcome } from './Dialogs';
+import { DrawingDialog } from './DrawingDialog';
 import { TooltipLayer } from './controls';
 import type { Viewport } from '../viewport/Viewport';
 
@@ -41,6 +42,7 @@ export function App({ viewport }: { viewport: Viewport }) {
       <About />
       <PrintDialog />
       <ParamsDialog />
+      <DrawingDialog />
       <Tour />
       <Toasts />
       <TooltipLayer />

@@ -65,6 +65,9 @@ function transformed(shape: R.Shape3D, m: THREE.Matrix4): R.Shape3D {
 }
 
 /** World-space shape of a placed brep body (caller frees it). */
+/** A solid moved into world space (a new shape; the caller deletes it). */
+export const transformedShape = (shape: R.Shape3D, m: THREE.Matrix4) => transformed(shape, m);
+
 function world(p: P): R.Shape3D {
   if (p.solid.kind !== 'brep') throw new Error('mesh');
   return transformed(p.solid.shape, p.matrix);

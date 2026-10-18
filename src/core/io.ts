@@ -12,7 +12,7 @@ import { materialById } from './materials';
 import { build3MF } from './printing';
 import type { DesignDoc } from './types';
 
-function download(blob: Blob, filename: string) {
+export function download(blob: Blob, filename: string) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = filename;

@@ -736,3 +736,25 @@ code { font-family: var(--mono); font-size: 0.92em; background: var(--panel-2); 
 .dof-chip.bad { background: rgba(248, 113, 113, 0.16); color: #f87171; }
 .banner .b-title .dof-chip { margin-left: 8px; vertical-align: 1px; }
 .chip.bad { border-color: #f87171; color: #f87171; }
+
+/* technical drawings */
+.drawing-dialog { width: min(1200px, calc(100vw - 40px)); }
+.drawing-sub { color: var(--text-3); font-size: 12px; margin-right: 6px; }
+.drawing-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+.sheet-preview {
+  position: relative; width: 100%; background: #fff; border-radius: 6px; overflow: hidden;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--line);
+}
+.sheet-svg, .sheet-svg svg { display: block; width: 100%; height: 100%; }
+.sheet-wait { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10px; color: #475569; font-size: 13px; padding: 20px; text-align: center; }
+.spin { animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.drawing-opts { display: flex; flex-direction: column; gap: 8px; }
+.drawing-opts .text-input, .drawing-opts .select { width: 100%; }
+.view-checks { display: flex; gap: 14px; flex-wrap: wrap; }
+.view-check { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-2); }
+.drawing-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.drawing-actions .btn { justify-content: center; }
+@media (max-width: 860px) {
+  .drawing-grid { grid-template-columns: minmax(0, 1fr); }
+}
