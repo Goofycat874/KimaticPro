@@ -45,7 +45,7 @@ function exportScene(onlySelection: boolean) {
   return scene;
 }
 
-export type ExportFormat = 'stl' | '3mf' | 'obj' | 'glb' | 'png' | 'kimatic';
+export type ExportFormat = 'step' | 'stl' | '3mf' | 'obj' | 'glb' | 'png' | 'kimatic';
 
 export async function exportAs(format: ExportFormat, onlySelection = false) {
   const name = safeName();
@@ -55,6 +55,20 @@ export async function exportAs(format: ExportFormat, onlySelection = false) {
     if (!url) return;
     const blob = await (await fetch(url)).blob();
     download(blob, `${name}.png`);
+    return;
+  }
+  if (format === 'step') {
+    try {
+      store.toast('Building exact STEP solids…');
+      const { kernel } = await import('../kernel/client');
+      const ids = onlySelection && store.state.selection.length ? store.state.selection : null;
+      const { blob, skipped } = await kernel.exportStep(store.doc, ids);
+      if (!blob) { store.toast('Nothing exact to export — threads and imported meshes have no STEP form.', 'error'); return; }
+      download(blob, `${name}.step`);
+      store.toast(skipped.length ? `Exported ${name}.step (skipped mesh bodies: ${skipped.join(', ')})` : `Exported ${name}.step`, 'success');
+    } catch (e: any) {
+      store.toast(e?.message ?? 'STEP export failed', 'error');
+    }
     return;
   }
   if (format === '3mf') {
@@ -133,6 +147,12 @@ export async function openFile(file: File) {
       store.load(doc);
       setTimeout(() => viewApi.fit?.(), 50);
       store.toast(`Opened ${doc.name}`, 'success');
+    } else if (ext === 'step' || ext === 'stp') {
+      store.toast(`Reading ${file.name}…`);
+      const { kernel } = await import('../kernel/client');
+      const r = await kernel.importStep(await file.text());
+      importMesh(base, r.mesh, r.step);
+      store.toast(`Imported ${base} (${r.faces} faces, exact)`, 'success');
     } else if (ext === 'stl') {
       const geo = new STLLoader().parse(await file.arrayBuffer());
       // STL is Z-up: rotate into KimaticPro's Y-up world
@@ -143,7 +163,7 @@ export async function openFile(file: File) {
       const obj = new OBJLoader().parse(await file.text());
       importMesh(base, encodePositions(groundPositions(new Float32Array(meshPositions(obj)))));
     } else {
-      store.toast(`Can't open .${ext} files yet. Try .kimatic, .stl or .obj`, 'error');
+      store.toast(`Can't open .${ext} files yet. Try .kimatic, .step, .stl or .obj`, 'error');
     }
   } catch (err: any) {
     store.toast(err?.message ?? 'Could not open that file', 'error');
@@ -160,7 +180,7 @@ function groundPositions(pos: Float32Array) {
   return pos;
 }
 
-export function pickFile(accept = '.kimatic,.json,.stl,.obj') {
+export function pickFile(accept = '.kimatic,.json,.step,.stp,.stl,.obj') {
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = accept;

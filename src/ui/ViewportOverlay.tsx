@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import {
   House, Focus, Diamond, Grid3x3, Scissors, Eye, Move, Rotate3d, Scale3d, X, Check, PenLine, Ruler, Box as BoxIcon,
-  Copy, Trash2, ArrowDownToLine, EyeOff, Ghost, SquaresUnite, ScanEye, Palette, ArrowUpFromLine, Shapes, PanelBottom, Layers2, SlidersHorizontal,
+  Copy, Trash2, ArrowDownToLine, EyeOff, Ghost, SquaresUnite, ScanEye, Palette, ArrowUpFromLine, Shapes, PanelBottom, Layers2, SlidersHorizontal, SquareRoundCorner,
 } from 'lucide-preact';
 import { store } from '../core/store';
 import * as A from '../core/actions';
@@ -11,6 +11,7 @@ import { featureOf } from '../core/evaluator';
 import { shapeThumbnail } from '../viewport/thumbnails';
 import { useClickOutside, useStore } from './hooks';
 import { cmd } from './commands';
+import { NumberField } from './controls';
 
 function NavBtn({ id, icon: Icon, label }: { id: string; icon: any; label?: string }) {
   useStore((s) => [s.projection, s.showGrid, s.section, s.showGhosts, s.displayMode]);
@@ -97,6 +98,7 @@ function Banner() {
       </div>
     );
   }
+  if (s.mode === 'pick') return <PickBanner />;
   if (s.mode === 'lay-flat') {
     return (
       <div class="banner">
@@ -116,6 +118,41 @@ function Banner() {
     );
   }
   return null;
+}
+
+const PICK_TEXT = {
+  fillet: { title: 'Fillet', what: 'edges', unit: 'mm', label: 'Radius' },
+  chamfer: { title: 'Chamfer', what: 'edges', unit: 'mm', label: 'Distance' },
+  shell: { title: 'Shell', what: 'faces to remove', unit: 'mm', label: 'Wall' },
+  draft: { title: 'Draft', what: 'faces to taper', unit: '°', label: 'Angle' },
+} as const;
+
+function PickBanner() {
+  const p = useStore((s) => s.pick);
+  const sel = useStore((s) => s.selection.length);
+  if (!p) return null;
+  const t = PICK_TEXT[p.op];
+  const n = p.refs.length;
+  const noun = p.kind === 'edges' ? (n === 1 ? 'edge' : 'edges') : n === 1 ? 'face' : 'faces';
+  const hint = n ? `${n} ${noun} picked` : p.op === 'draft' ? `Click the ${t.what}` : sel ? `Click ${t.what} — or Apply for the whole body` : `Click the ${t.what}`;
+  return (
+    <div class="banner pick-banner">
+      <SquareRoundCorner size={17} style={{ color: 'var(--accent)' }} />
+      <div><div class="b-title">{t.title}</div><div class="b-sub">{hint}</div></div>
+      {(p.op === 'fillet' || p.op === 'chamfer') && (
+        <div class="seg" style={{ width: 150 }}>
+          <button class={p.op === 'fillet' ? 'on' : ''} onClick={() => A.setPickOp('fillet')}>Round</button>
+          <button class={p.op === 'chamfer' ? 'on' : ''} onClick={() => A.setPickOp('chamfer')}>Bevel</button>
+        </div>
+      )}
+      <div style={{ width: 120 }}>
+        <NumberField value={p.value} unit={t.unit} label={t.label[0]} min={p.op === 'draft' ? -45 : 0.05} max={p.op === 'draft' ? 45 : 500} step={p.op === 'draft' ? 1 : 0.5}
+          onChange={(v) => A.setPickValue(v)} />
+      </div>
+      <button class="btn small primary" onClick={() => A.applyPick()} data-tip-key="Enter" data-tip-title="Apply">Apply</button>
+      <button class="icon-btn" onClick={() => A.cancelPick()} data-tip-title="Cancel" data-tip-key="Escape"><X size={16} /></button>
+    </div>
+  );
 }
 
 function EmptyState() {

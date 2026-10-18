@@ -6,6 +6,7 @@ import { Viewport } from './viewport/Viewport';
 import { App } from './ui/App';
 import { installKeyboard } from './ui/keyboard';
 import { runCmd } from './ui/commands';
+import { startPreciseSync } from './kernel/client';
 
 const viewport = new Viewport();
 installKeyboard((e) => viewport.handleKey(e));
@@ -21,6 +22,9 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 render(<App viewport={viewport} />, document.getElementById('app')!);
+
+// load the exact (OpenCascade) geometry engine in the background
+startPreciseSync();
 
 // offline + installable (production builds only; some hosts don't allow service workers)
 if (import.meta.env.PROD && 'serviceWorker' in navigator && location.protocol === 'https:') {

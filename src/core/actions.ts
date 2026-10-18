@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { store } from './store';
-import type { SketchTool } from './store';
+import type { PickState, SketchTool } from './store';
 import { bodyBounds, featureOf, trsMatrix, type EvalBody } from './evaluator';
 import { defaultParams, shapeById } from './primitives';
 import { nextColor } from './materials';
@@ -104,11 +104,11 @@ export function addShape(shapeId: string, opts: { position?: Vec3; op?: BodyOp; 
   }, { selection: [id], selectedFeature: id, mode: 'model' });
 }
 
-export function importMesh(name: string, data: string) {
+export function importMesh(name: string, data: string, step?: string) {
   const id = uid('i');
   store.commit(`Import ${name}`, (doc) => {
     insertFeature(doc, {
-      id, type: 'import', name, data, transform: identityTRS(),
+      id, type: 'import', name, data, ...(step ? { step } : {}), transform: identityTRS(),
       appearance: { color: '#94a3b8', material: 'pla' },
     });
   }, { selection: [id], selectedFeature: id });
@@ -669,4 +669,85 @@ export function setExpr(fid: string, path: string, expr: string | null): boolean
 
 export function setParams(params: NonNullable<DesignDoc['params']>) {
   store.commit('Change parameters', (doc) => { doc.params = params; });
+}
+
+// ---------------------------------------------------------------------------
+// precise tools: fillet / chamfer / shell / draft by picking edges and faces
+
+const PICK_DEFAULTS = { fillet: 2, chamfer: 1, shell: 2, draft: 3 } as const;
+
+export function beginPick(op: PickState['op']) {
+  const kind = op === 'fillet' || op === 'chamfer' ? 'edges' : 'faces';
+  store.set({ mode: 'pick', pick: { op, kind, refs: [], value: PICK_DEFAULTS[op] }, contextMenu: null });
+}
+
+export function editPick(featureId: string) {
+  const f = featureOf(store.doc, featureId);
+  if (!f || (f.type !== 'fillet' && f.type !== 'shell' && f.type !== 'draft')) return;
+  const op = f.type === 'fillet' ? f.mode : f.type;
+  const pts = f.type === 'fillet' ? f.edges : f.faces;
+  store.set({
+    mode: 'pick',
+    pick: {
+      op, kind: f.type === 'fillet' ? 'edges' : 'faces', featureId,
+      refs: pts.map((point, i) => ({ bodyId: f.bodyId, point, sid: -1 - i })),
+      value: f.type === 'fillet' ? f.radius : f.type === 'shell' ? f.thickness : f.angle,
+    },
+  });
+}
+
+export function togglePickRef(bodyId: string, point: Vec3, sid: number) {
+  const p = store.state.pick;
+  if (!p) return;
+  const i = p.refs.findIndex((r) => r.bodyId === bodyId && (r.sid === sid || (r.sid < 0 && new THREE.Vector3(...r.point).distanceTo(new THREE.Vector3(...point)) < 0.5)));
+  const refs = i >= 0 ? p.refs.filter((_, j) => j !== i) : [...p.refs, { bodyId, point, sid }];
+  store.set({ pick: { ...p, refs } });
+}
+
+export function setPickValue(value: number) {
+  const p = store.state.pick;
+  if (p) store.set({ pick: { ...p, value } });
+}
+
+export function setPickOp(op: PickState['op']) {
+  const p = store.state.pick;
+  if (p) store.set({ pick: { ...p, op } });
+}
+
+export function cancelPick() {
+  store.set({ mode: 'model', pick: null });
+}
+
+/** Turn the picked edges/faces into timeline steps (one per body). */
+export function applyPick() {
+  const p = store.state.pick;
+  if (!p) return;
+  let groups = new Map<string, Vec3[]>();
+  for (const r of p.refs) groups.set(r.bodyId, [...(groups.get(r.bodyId) ?? []), r.point]);
+  if (!groups.size) {
+    // nothing picked: apply to the whole selected body (all edges / open top face)
+    const b = store.state.selection[0];
+    if (!b || p.op === 'draft') { store.toast(p.kind === 'edges' ? 'Click the edges to round first.' : 'Click the faces first.'); return; }
+    groups = new Map([[b, []]]);
+  }
+  const label = { fillet: 'Fillet', chamfer: 'Chamfer', shell: 'Shell', draft: 'Draft' }[p.op];
+  let lastId = p.featureId ?? '';
+  store.commit(label, (doc) => {
+    for (const [bodyId, pts] of groups) {
+      const existing = p.featureId ? doc.features.find((f) => f.id === p.featureId) : undefined;
+      if (existing && (existing.type === 'fillet' || existing.type === 'shell' || existing.type === 'draft') && existing.bodyId === bodyId) {
+        if (existing.type === 'fillet') Object.assign(existing, { edges: pts, radius: p.value, mode: p.op === 'chamfer' ? 'chamfer' : 'fillet' });
+        else if (existing.type === 'shell') Object.assign(existing, { faces: pts, thickness: p.value });
+        else Object.assign(existing, { faces: pts, angle: p.value });
+        continue;
+      }
+      const id = uid('fx');
+      lastId = id;
+      const base = { id, name: nextName(doc, label), bodyId };
+      insertFeature(doc, p.op === 'fillet' || p.op === 'chamfer'
+        ? { ...base, type: 'fillet', mode: p.op, edges: pts, radius: p.value }
+        : p.op === 'shell' ? { ...base, type: 'shell', faces: pts, thickness: p.value }
+          : { ...base, type: 'draft', faces: pts, angle: p.value });
+    }
+  }, { mode: 'model', pick: null, selectedFeature: lastId || null, selection: [...groups.keys()].slice(0, 1) });
 }

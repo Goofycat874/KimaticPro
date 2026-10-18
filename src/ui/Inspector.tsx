@@ -391,6 +391,30 @@ function FeatureEditor({ f, withTransform = true }: { f: Feature; withTransform?
         <OperationEditor f={f} />
         {withTransform && <TransformEditor fid={f.id} t={f.transform} />}
       </>;
+    case 'fillet':
+    case 'shell':
+    case 'draft': {
+      const isEdges = f.type === 'fillet';
+      const refs = f.type === 'fillet' ? f.edges : f.faces;
+      return <Section title={f.type === 'fillet' ? (f.mode === 'fillet' ? 'Fillet' : 'Chamfer') : f.type === 'shell' ? 'Shell' : 'Draft'}>
+        <Field label="Body"><span>{bodyName(f.bodyId)}</span></Field>
+        {f.type === 'fillet' && (
+          <Field label="Style">
+            <Segmented value={f.mode} onChange={(v) => edit(f.id, 'Fillet style', (x) => { x.mode = v; })} options={[
+              { value: 'fillet', label: 'Round' }, { value: 'chamfer', label: 'Bevel' },
+            ]} />
+          </Field>
+        )}
+        {f.type === 'fillet' && <Field label={f.mode === 'fillet' ? 'Radius' : 'Distance'}><PNum f={f} path="radius" title="Fillet size" unit="mm" label="◠" min={0.01} max={1000} step={0.5} /></Field>}
+        {f.type === 'shell' && <Field label="Wall"><PNum f={f} path="thickness" title="Wall thickness" unit="mm" label="▭" min={0.05} max={1000} step={0.5} /></Field>}
+        {f.type === 'draft' && <Field label="Angle"><PNum f={f} path="angle" title="Draft angle" unit="°" label="∠" min={-45} max={45} step={1} /></Field>}
+        <Field label={isEdges ? 'Edges' : 'Faces'}>
+          <span>{refs.length ? `${refs.length} picked` : isEdges ? 'all edges' : f.type === 'shell' ? 'top face (auto)' : 'none'}</span>
+        </Field>
+        <div class="row-actions"><button class="btn small" onClick={() => A.editPick(f.id)}><Pencil size={13} /> Re-pick {isEdges ? 'edges' : 'faces'}</button></div>
+        <div style={{ fontSize: 11.5, color: 'var(--text-3)', lineHeight: 1.5, marginTop: 8 }}>Needs the precise engine — the quick preview shows the body without it while you drag.</div>
+      </Section>;
+    }
     case 'split':
       return <Section title="Split body">
         <Field label="Body"><span>{bodyName(f.bodyId)}</span></Field>

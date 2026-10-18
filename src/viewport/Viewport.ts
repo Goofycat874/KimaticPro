@@ -15,6 +15,7 @@ import { printerById } from '../core/printing';
 import { ViewCube } from './ViewCube';
 import { SketchController } from './SketchController';
 import { featureEdges } from './edges';
+import { PickController } from './PickController';
 
 const DEG = 180 / Math.PI;
 const ACCENT = '#2f7bff';
@@ -29,9 +30,13 @@ interface BodyView {
 
 const edgeCache = new WeakMap<THREE.BufferGeometry, THREE.BufferGeometry>();
 const NO_EDGES = new THREE.BufferGeometry();
-function edgesOf(g: THREE.BufferGeometry) {
+function edgesOf(g: THREE.BufferGeometry): THREE.BufferGeometry {
   let e = edgeCache.get(g);
-  if (!e) { e = featureEdges(g, g.userData.edgeAngle ?? 28); edgeCache.set(g, e); }
+  // precise bodies come with their real B-rep edges; meshes get detected feature edges
+  if (!e) {
+    e = (g.userData.edges as THREE.BufferGeometry | undefined) ?? featureEdges(g, g.userData.edgeAngle ?? 28);
+    edgeCache.set(g, e);
+  }
   return e;
 }
 
@@ -80,6 +85,7 @@ export class Viewport {
   private sun: THREE.DirectionalLight;
   private viewCube: ViewCube;
   private sketch: SketchController;
+  private pick: PickController;
   private ray = new THREE.Raycaster();
   private down: { x: number; y: number; button: number; t: number } | null = null;
   private hoverId: string | null = null;
@@ -185,6 +191,14 @@ export class Viewport {
       accent: () => ACCENT,
     });
     this.scene.add(this.sketch.group);
+    this.pick = new PickController({
+      camera: () => this.camera,
+      canvas: this.canvas,
+      size: () => this.size,
+      views: () => [...this.views].map(([bodyId, v]) => ({ bodyId, mesh: v.mesh, edges: v.edges })),
+      invalidate: () => this.invalidate(),
+    });
+    this.scene.add(this.pick.group);
     this.buildPlanePicker();
     this.scene.add(this.bed, this.flatMarker);
     this.flatMarker.visible = false;
@@ -219,6 +233,7 @@ export class Viewport {
     this.persp.updateProjectionMatrix();
     this.updateOrtho();
     this.sketch.setResolution(w, h);
+    this.pick?.setResolution(w, h);
     this.invalidate();
   }
 
@@ -279,6 +294,11 @@ export class Viewport {
     if (s.showGrid !== p.showGrid) { this.grid.mesh.visible = s.showGrid; this.invalidate(); }
     if (s.projection !== p.projection) this.setProjection(s.projection);
     if (s.measure !== p.measure) this.syncMeasure();
+    if (s.pick !== p.pick || (s.mode === 'pick' && s.result !== p.result)) {
+      // body meshes must be up to date before picked edges/faces are re-highlighted
+      this.bodiesGroup.updateMatrixWorld(true);
+      this.pick.sync();
+    }
     if (s.showBed !== p.showBed || s.printerId !== p.printerId || s.result !== p.result || s.theme !== p.theme) this.syncBed();
     if (s.showOverhangs !== p.showOverhangs) { overhangUniform.value = s.showOverhangs ? 1 : 0; this.invalidate(); }
   }
@@ -532,7 +552,8 @@ export class Viewport {
   private onModeChange(mode: AppState['mode'], prev: AppState['mode']) {
     this.setMouseMode(mode);
     this.planePicker.visible = mode === 'pick-plane';
-    this.canvas.style.cursor = mode === 'measure' || mode === 'pick-plane' || mode === 'lay-flat' ? 'crosshair' : mode === 'sketch' ? 'crosshair' : '';
+    this.canvas.style.cursor = mode === 'measure' || mode === 'pick-plane' || mode === 'lay-flat' || mode === 'pick' ? 'crosshair' : mode === 'sketch' ? 'crosshair' : '';
+    if (prev === 'pick') this.pick.reset();
     if (mode !== 'lay-flat') this.flatMarker.visible = false;
     if (prev === 'sketch') this.sketch.cancel();
     if (prev === 'measure') store.set({ measure: { a: null, b: null } });
@@ -668,6 +689,7 @@ export class Viewport {
       if (mode === 'sketch') { this.sketch.pointerMove(e); return; }
       if (e.buttons) return;
       if (mode === 'pick-plane') { this.hoverPlanes(e); return; }
+      if (mode === 'pick') { this.pick.move(e); return; }
       const hit = this.pickBody(e);
       if (mode === 'lay-flat') this.showFlatMarker(hit);
       const id = (hit?.object.userData.bodyId as string) ?? null;
@@ -746,6 +768,7 @@ export class Viewport {
       }
       return;
     }
+    if (mode === 'pick') { this.pick.click(e); return; }
     if (mode === 'lay-flat') {
       const hit = this.pickBody(e);
       const id = hit?.object.userData.bodyId as string | undefined;

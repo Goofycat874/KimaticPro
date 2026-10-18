@@ -235,6 +235,10 @@ export function Ribbon() {
               <Tool id="modify.cut" cls="hole-tool" />
               <Tool id="modify.hole" cls="hole-tool" />
             </Group>
+            <Group label="Edges">
+              <Tool id="modify.fillet" />
+              <Tool id="modify.shell" />
+            </Group>
             <Group label="Copy">
               <Tool id="edit.duplicate" />
               <Tool id="modify.pattern" />
@@ -258,6 +262,12 @@ export function Ribbon() {
               <Tool id="modify.circular" label="Circular" />
               <Tool id="modify.mirror" />
               <Tool id="edit.duplicate" />
+            </Group>
+            <Group label="Precise">
+              <Tool id="modify.fillet" />
+              <Tool id="modify.chamfer" />
+              <Tool id="modify.shell" />
+              <Tool id="modify.draft" />
             </Group>
             <Group label="Shape">
               <Tool id="modify.split" label="Split" />
@@ -332,6 +342,7 @@ export function Ribbon() {
               <Tool id="file.import" label="Import" />
             </Group>
             <Group label="Export">
+              <Tool id="export.step" label="STEP" />
               <Tool id="export.3mf" label="3MF" />
               <Tool id="export.stl" label="STL" />
               <Tool id="export.obj" label="OBJ" />

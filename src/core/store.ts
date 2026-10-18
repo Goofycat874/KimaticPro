@@ -1,7 +1,18 @@
 import { evaluate, type EvalResult } from './evaluator';
 import type { DesignDoc } from './types';
 
-export type Mode = 'model' | 'pick-plane' | 'sketch' | 'measure' | 'lay-flat';
+export type Mode = 'model' | 'pick-plane' | 'sketch' | 'measure' | 'lay-flat' | 'pick';
+
+/** Edge/face picking for precise tools (fillet, chamfer, shell, draft). */
+export interface PickState {
+  op: 'fillet' | 'chamfer' | 'shell' | 'draft';
+  kind: 'edges' | 'faces';
+  /** Picked items: the body, a point on the edge/face (world), and the B-rep id it had when picked. */
+  refs: { bodyId: string; point: [number, number, number]; sid: number }[];
+  value: number;
+  /** Editing an existing step instead of creating one. */
+  featureId?: string;
+}
 export type SketchTool = 'select' | 'line' | 'rect' | 'crect' | 'circle' | 'polygon' | 'spline' | 'slot';
 export type DisplayMode = 'shaded' | 'edges' | 'wire' | 'xray';
 export type GizmoMode = 'translate' | 'rotate' | 'scale';
@@ -39,6 +50,7 @@ export interface AppState {
   toasts: Toast[];
   measure: { a: [number, number, number] | null; b: [number, number, number] | null };
   contextMenu: { x: number; y: number; bodyId: string | null } | null;
+  pick: PickState | null;
   /** Phones: which side panel is slid in over the viewport. */
   sheet: null | 'browser' | 'inspector';
   dirty: boolean;
@@ -107,6 +119,7 @@ export class Store {
       toasts: [],
       measure: { a: null, b: null },
       contextMenu: null,
+      pick: null,
       sheet: null,
       dirty: false,
       canUndo: null,
@@ -115,6 +128,17 @@ export class Store {
   }
 
   get doc() { return this.state.doc; }
+
+  /** True while a drag is in progress (changes are live but not yet an undo step). */
+  get inTransient() { return this.transientBase !== null; }
+
+  /** Lets the precise kernel carry its results over to new previews where nothing changed. */
+  postProcess: ((r: EvalResult) => EvalResult) | null = null;
+
+  private evalDoc(doc: DesignDoc) {
+    const r = evaluate(doc);
+    return this.postProcess ? this.postProcess(r) : r;
+  }
 
   subscribe(fn: Listener) {
     this.listeners.add(fn);
@@ -168,12 +192,12 @@ export class Store {
     this.evalScheduled = true;
     requestAnimationFrame(() => {
       this.evalScheduled = false;
-      this.set({ result: evaluate(this.state.doc) });
+      this.set({ result: this.evalDoc(this.state.doc) });
     });
   }
 
   private applyDoc(doc: DesignDoc, extra: Partial<AppState> = {}) {
-    const result = evaluate(doc);
+    const result = this.evalDoc(doc);
     const ids = new Set(result.bodies.map((b) => b.id));
     const selection = (extra.selection ?? this.state.selection).filter((id) => ids.has(id));
     const fids = new Set(doc.features.map((f) => f.id));

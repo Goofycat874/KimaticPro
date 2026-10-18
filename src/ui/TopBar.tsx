@@ -50,10 +50,10 @@ export function TopBar() {
         <div class="brand-name">Kimatic<span>Pro</span></div>
       </div>
       <MenuButton cls="mobile-only" label={<Menu size={18} />}
-        items={['file.new', 'file.open', 'file.save', 'file.import', '-', 'print.check', 'export.3mf', 'export.stl', 'export.glb', 'export.png', '-',
+        items={['file.new', 'file.open', 'file.save', 'file.import', '-', 'print.check', 'export.step', 'export.3mf', 'export.stl', 'export.glb', 'export.png', '-',
           'edit.duplicate', 'edit.delete', 'edit.selectAll', '-', 'modify.params', 'view.home', 'view.fit', 'view.ortho', 'view.grid', 'view.showAll', 'view.theme', '-', 'help.tour']} />
       <MenuButton cls="desktop-only" label={<><Menu size={16} /> File <ChevronDown size={13} /></>}
-        items={['file.new', 'file.open', 'file.save', '-', 'file.import', '-', 'print.check', 'export.3mf', 'export.stl', 'export.obj', 'export.glb', 'export.png']} />
+        items={['file.new', 'file.open', 'file.save', '-', 'file.import', '-', 'print.check', 'export.step', 'export.3mf', 'export.stl', 'export.obj', 'export.glb', 'export.png']} />
       <MenuButton cls="desktop-only" label={<>Edit <ChevronDown size={13} /></>}
         items={['edit.undo', 'edit.redo', '-', 'edit.copy', 'edit.paste', 'edit.duplicate', 'edit.delete', '-', 'edit.selectAll']} />
       <MenuButton cls="desktop-only" label={<>View <ChevronDown size={13} /></>}

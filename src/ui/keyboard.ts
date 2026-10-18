@@ -1,5 +1,5 @@
 import { store } from '../core/store';
-import { nudge, select } from '../core/actions';
+import { applyPick, cancelPick, nudge, select } from '../core/actions';
 import { COMMANDS, runCmd } from './commands';
 
 /** Keys that only apply in sketch mode override model-mode shortcuts with the same letter. */
@@ -37,11 +37,13 @@ export function installKeyboard(viewportKey: (e: KeyboardEvent) => boolean) {
     if (e.key === 'Escape') {
       if (s.contextMenu) store.set({ contextMenu: null });
       else if (s.mode === 'sketch') runCmd('sketch.finish');
+      else if (s.mode === 'pick') cancelPick();
       else if (s.mode !== 'model') store.set({ mode: 'model' });
       else select([]);
       return;
     }
 
+    if (s.mode === 'pick' && e.key === 'Enter') { applyPick(); return; }
     if (s.mode === 'sketch') {
       const id = SKETCH_KEYS[e.key.toLowerCase()];
       if (id && !e.ctrlKey && !e.metaKey) { runCmd(id); e.preventDefault(); return; }

@@ -5,7 +5,7 @@ import {
   Ruler, Scissors, Eye, Download, Save, FolderOpen, Image, FilePlus2, Undo2, Redo2, Focus, House, Search,
   Keyboard, Sun, Moon, GraduationCap, Grid3x3, Layers2, Spline, RectangleHorizontal, Circle, Hexagon, MousePointer2,
   Check, Upload, ScanEye, Crosshair, Diamond, SquareDashed, Pill, Ghost, Printer, BedDouble, PanelBottom, LayoutGrid,
-  TriangleAlert, ClipboardCheck, Blend, SquareSplitVertical, Variable,
+  TriangleAlert, ClipboardCheck, Blend, SquareSplitVertical, Variable, SquareRoundCorner, PackageOpen, Triangle, FileBox,
 } from 'lucide-preact';
 import { store } from '../core/store';
 import * as A from '../core/actions';
@@ -35,9 +35,10 @@ export const COMMANDS: Command[] = [
   { id: 'file.new', label: 'New design', group: 'File', icon: FilePlus2, desc: 'Start a fresh, empty design.', key: 'Alt+N', run: () => store.set({ welcome: true }) },
   { id: 'file.open', label: 'Open…', group: 'File', icon: FolderOpen, desc: 'Open a .kimatic design, or import an STL / OBJ mesh.', key: 'Ctrl+O', run: () => pickFile() },
   { id: 'file.save', label: 'Save', group: 'File', icon: Save, desc: 'Download your design as a .kimatic file you can reopen and keep editing.', key: 'Ctrl+S', run: saveProject },
-  { id: 'file.import', label: 'Import mesh', group: 'File', icon: Upload, desc: 'Bring in an STL or OBJ model from another app.', run: () => pickFile('.stl,.obj') },
+  { id: 'file.import', label: 'Import model', group: 'File', icon: Upload, desc: 'Bring in a STEP (exact CAD), STL or OBJ model from another app.', run: () => pickFile('.step,.stp,.stl,.obj'), keywords: 'step stp stl obj' },
   { id: 'export.stl', label: 'Export STL (3D print)', group: 'Export', icon: Download, desc: 'The standard file for 3D printers and slicers.', key: 'Ctrl+E', run: () => exportAs('stl'), keywords: 'print slicer cura prusa' },
   { id: 'export.3mf', label: 'Export 3MF (3D print)', group: 'Export', icon: Download, desc: 'The modern slicer format: exact millimetres, separate parts and colours. Best for Bambu, Prusa and Cura.', run: () => exportAs('3mf'), keywords: 'print slicer bambu orca prusa' },
+  { id: 'export.step', label: 'Export STEP (CAD)', group: 'Export', icon: FileBox, desc: 'Exact solids for SolidWorks, Fusion, Onshape, FreeCAD and machine shops.', run: () => exportAs('step'), keywords: 'stp iso 10303 solidworks fusion onshape freecad cnc' },
   { id: 'export.obj', label: 'Export OBJ', group: 'Export', icon: Download, desc: 'Widely supported mesh format.', run: () => exportAs('obj') },
   { id: 'export.glb', label: 'Export GLB', group: 'Export', icon: Download, desc: 'glTF binary with colours — for games, AR and the web.', run: () => exportAs('glb'), keywords: 'gltf blender unity' },
   { id: 'export.png', label: 'Save image', group: 'Export', icon: Image, desc: 'Save a picture of the current view.', run: () => exportAs('png'), keywords: 'screenshot render picture' },
@@ -77,6 +78,10 @@ export const COMMANDS: Command[] = [
   { id: 'modify.pattern', label: 'Pattern', group: 'Modify', icon: Repeat, desc: 'Repeat the selection in a row.', run: () => A.addPattern('linear'), enabled: hasSel, keywords: 'array repeat copy row' },
   { id: 'modify.circular', label: 'Circular pattern', group: 'Modify', icon: Orbit, desc: 'Repeat the selection around a circle.', run: () => A.addPattern('circular'), enabled: hasSel, keywords: 'array radial' },
   { id: 'modify.mirror', label: 'Mirror', group: 'Modify', icon: FlipHorizontal2, desc: 'Make a mirror-image copy across a plane.', key: 'M', run: () => A.addMirror(), enabled: hasSel, keywords: 'flip symmetry' },
+  { id: 'modify.fillet', label: 'Fillet', group: 'Modify', icon: SquareRoundCorner, desc: 'Round off edges. Click the edges you want, set the radius, then Apply. With a body selected and no edges picked, every edge is rounded.', run: () => A.beginPick('fillet'), keywords: 'round radius blend edge' },
+  { id: 'modify.chamfer', label: 'Chamfer', group: 'Modify', icon: Diamond, desc: 'Bevel edges with a flat 45° cut. Click the edges, set the distance, then Apply.', run: () => A.beginPick('chamfer'), keywords: 'bevel edge' },
+  { id: 'modify.shell', label: 'Shell', group: 'Modify', icon: PackageOpen, desc: 'Hollow a body out with an even wall. Click the faces to remove (open), or just Apply to open the top.', run: () => A.beginPick('shell'), keywords: 'hollow wall thickness cup' },
+  { id: 'modify.draft', label: 'Draft', group: 'Modify', icon: Triangle, desc: 'Taper faces by an angle (from the bottom) so moulded or cast parts release easily.', run: () => A.beginPick('draft'), keywords: 'taper angle mould cast' },
   { id: 'modify.split', label: 'Split body', group: 'Modify', icon: SquareSplitVertical, desc: 'Cut a body into two parts with a plane — print big things in pieces.', run: () => A.addSplit(), enabled: () => store.state.selection.length === 1, keywords: 'cut half divide plane' },
   { id: 'modify.params', label: 'Parameters', group: 'Modify', icon: Variable, desc: 'Name your key sizes (like wall = 2) and use them in any field: type “wall * 2”. Change one number, the whole design updates.', run: () => store.set({ dialog: 'params' }), keywords: 'variables formula expression dimension' },
   { id: 'arrange.drop', label: 'Drop to ground', group: 'Arrange', icon: ArrowDownToLine, desc: 'Sit the selection flat on the ground.', key: 'D', run: () => A.dropToGround(), enabled: hasSel, keywords: 'floor' },
