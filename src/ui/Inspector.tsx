@@ -3,12 +3,14 @@ import * as THREE from 'three';
 import {
   Box, PenLine, Copy, ArrowDownToLine, EyeOff, Trash2, Lightbulb, TriangleAlert, Pencil, ArrowUpFromLine, RotateCw,
   SquaresUnite, SquaresSubtract, SquaresIntersect, Repeat, FlipHorizontal2, Move, Upload, Ruler, Sparkles, Orbit, CircleOff,
+  Blend, Spline, SquareSplitVertical, ArrowUp, ArrowDown,
 } from 'lucide-preact';
 import { store } from '../core/store';
 import * as A from '../core/actions';
 import { bodyBounds, featureOf, type EvalBody } from '../core/evaluator';
 import { shapeById, SHAPES } from '../core/primitives';
 import { metricPitch } from '../core/hardware';
+import { evalExpr } from '../core/expr';
 import { MATERIALS, SWATCHES, materialById } from '../core/materials';
 import { computeArea, computeVolume, triangleCount } from '../core/geometry';
 import type { BodyOp, Feature, SketchEntity, TRS, Vec3 } from '../core/types';
@@ -28,6 +30,9 @@ const TYPE_META: Record<Feature['type'], { label: string; color: string; icon: a
   pattern: { label: 'Pattern', color: '#06b6d4', icon: Repeat },
   mirror: { label: 'Mirror', color: '#ec4899', icon: FlipHorizontal2 },
   import: { label: 'Imported mesh', color: '#94a3b8', icon: Upload },
+  loft: { label: 'Loft', color: '#10b981', icon: Blend },
+  sweep: { label: 'Sweep', color: '#0ea5e9', icon: Spline },
+  split: { label: 'Split', color: '#f43f5e', icon: SquareSplitVertical },
 };
 export { TYPE_META };
 
@@ -36,6 +41,37 @@ function edit(fid: string, label: string, fn: (f: any) => void, live = false) {
   A.updateFeature(fid, fn, label, live);
 }
 const commit = (label: string) => () => store.endTransient(label);
+
+const getPath = (o: any, path: string) => path.split('.').reduce((a, k) => (a == null ? a : a[k]), o);
+
+/**
+ * A number field bound to a feature property. Accepts plain numbers, maths, or
+ * formulas using the design's parameters (`width / 2`), which stay linked.
+ */
+function PNum(props: {
+  f: Feature; path: string; title: string; label?: string; unit?: string; min?: number; max?: number; step?: number;
+  integer?: boolean; nonZero?: boolean; after?: (x: any, v: number) => void;
+}) {
+  const vars = useStore((s) => s.result.vars);
+  const { f, path, title } = props;
+  const expr = f.exprs?.[path];
+  let value = Number(getPath(f, path));
+  if (expr) { try { value = evalExpr(expr, vars); } catch { /* shown as error on the step */ } }
+  return (
+    <NumberField value={value} unit={props.unit} min={props.min} max={props.max} step={props.step} integer={props.integer} label={props.label ?? '↔'}
+      expr={expr}
+      onExpr={(e) => A.setExpr(f.id, path, e)}
+      onChange={(v, live) => edit(f.id, title, (x) => {
+        const val = props.nonZero ? v || 0.1 : v;
+        const keys = path.split('.');
+        const parent = keys.slice(0, -1).reduce((a: any, k) => a[k], x);
+        parent[keys[keys.length - 1]] = val;
+        if (x.exprs?.[path]) { x.exprs = { ...x.exprs }; delete x.exprs[path]; }
+        props.after?.(x, val);
+      }, live)}
+      onCommit={commit(title)} />
+  );
+}
 
 function Section(props: { title: string; children: any; right?: any }) {
   return (
@@ -80,13 +116,10 @@ function ShapeParams({ f }: { f: Extract<Feature, { type: 'primitive' }> }) {
         }
         return (
           <Field key={p.key} label={p.label} tip={p.hint}>
-            <NumberField value={Number(v)} unit={p.unit} min={p.min} max={p.max} step={p.type === 'int' ? 1 : p.step ?? 1} integer={p.type === 'int'} label="↔"
-              onChange={(nv, live) => edit(f.id, `Change ${p.label.toLowerCase()}`, (x) => {
-                x.params[p.key] = nv;
-                // threads follow the metric coarse pitch for the chosen diameter
-                if (p.key === 'diameter' && def.params.some((q) => q.key === 'pitch')) x.params.pitch = metricPitch(nv);
-              }, live)}
-              onCommit={commit(`Change ${p.label.toLowerCase()}`)} />
+            <PNum f={f} path={`params.${p.key}`} title={`Change ${p.label.toLowerCase()}`} unit={p.unit} min={p.min} max={p.max}
+              step={p.type === 'int' ? 1 : p.step ?? 1} integer={p.type === 'int'} label="↔"
+              // threads follow the metric coarse pitch for the chosen diameter
+              after={p.key === 'diameter' && def.params.some((q) => q.key === 'pitch') ? (x, nv) => { x.params.pitch = metricPitch(nv); } : undefined} />
           </Field>
         );
       })}
@@ -94,7 +127,7 @@ function ShapeParams({ f }: { f: Extract<Feature, { type: 'primitive' }> }) {
   );
 }
 
-function OperationEditor({ f }: { f: Extract<Feature, { type: 'primitive' | 'extrude' | 'revolve' }> }) {
+function OperationEditor({ f }: { f: Extract<Feature, { type: 'primitive' | 'extrude' | 'revolve' | 'loft' | 'sweep' }> }) {
   const bodies = useStore((s) => s.result.bodies);
   const others = bodies.filter((b) => b.id !== f.id);
   return (
@@ -151,6 +184,64 @@ function bodyName(id: string) {
   return A.bodyById(id)?.name ?? featureOf(store.doc, id)?.name ?? 'missing body';
 }
 
+const planeOffset = (p: { origin: number[]; normal: number[] }) => {
+  const n = Math.hypot(p.normal[0], p.normal[1], p.normal[2]) || 1;
+  return Math.round(((p.origin[0] * p.normal[0] + p.origin[1] * p.normal[1] + p.origin[2] * p.normal[2]) / n) * 1000) / 1000;
+};
+function withOffset<P extends { origin: [number, number, number]; normal: [number, number, number] }>(p: P, v: number): P {
+  const n = Math.hypot(...p.normal) || 1;
+  const d = v - planeOffset(p);
+  return { ...p, origin: p.origin.map((o, i) => Math.round((o + (p.normal[i] / n) * d) * 1000) / 1000) as [number, number, number] };
+}
+
+function sketchesBefore(fid: string) {
+  const idx = store.doc.features.findIndex((x) => x.id === fid);
+  return store.doc.features.slice(0, idx < 0 ? undefined : idx).filter((x) => x.type === 'sketch');
+}
+
+function SketchSelect(props: { value: string; before: string; onChange: (id: string) => void }) {
+  useStore((s) => s.doc);
+  return (
+    <select class="select" value={props.value} onChange={(e) => props.onChange((e.currentTarget as HTMLSelectElement).value)}>
+      {sketchesBefore(props.before).map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+    </select>
+  );
+}
+
+function LoftSections({ f }: { f: Extract<Feature, { type: 'loft' }> }) {
+  useStore((s) => s.doc);
+  const all = sketchesBefore(f.id);
+  const name = (id: string) => all.find((k) => k.id === id)?.name ?? 'missing sketch';
+  const move = (i: number, d: number) => edit(f.id, 'Reorder loft', (x) => {
+    const ids = [...x.sketchIds];
+    const j = i + d;
+    if (j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    x.sketchIds = ids;
+  });
+  return (
+    <Section title="Loft through">
+      {f.sketchIds.map((id, i) => (
+        <div key={id} class="loft-row">
+          <span class="loft-n">{i + 1}</span>
+          <span class="grow">{name(id)}</span>
+          <button class="mini-btn" disabled={i === 0} onClick={() => move(i, -1)} data-tip-title="Move up"><ArrowUp size={13} /></button>
+          <button class="mini-btn" disabled={i === f.sketchIds.length - 1} onClick={() => move(i, 1)} data-tip-title="Move down"><ArrowDown size={13} /></button>
+          <button class="mini-btn" disabled={f.sketchIds.length <= 2} onClick={() => edit(f.id, 'Remove loft section', (x) => { x.sketchIds = x.sketchIds.filter((s: string) => s !== id); })} data-tip-title="Remove"><Trash2 size={13} /></button>
+        </div>
+      ))}
+      <div class="chips" style={{ marginTop: 8 }}>
+        {all.filter((k) => !f.sketchIds.includes(k.id)).map((k) => (
+          <button key={k.id} class="chip" onClick={() => edit(f.id, 'Add loft section', (x) => { x.sketchIds = [...x.sketchIds, k.id]; })}>+ {k.name}</button>
+        ))}
+      </div>
+      <Field label="Smooth" tip="Curve smoothly through 3+ sections instead of straight between them.">
+        <Toggle value={f.smooth} onChange={(v) => edit(f.id, 'Smooth loft', (x) => { x.smooth = v; })} />
+      </Field>
+    </Section>
+  );
+}
+
 function FeatureEditor({ f, withTransform = true }: { f: Feature; withTransform?: boolean }) {
   switch (f.type) {
     case 'primitive':
@@ -163,15 +254,13 @@ function FeatureEditor({ f, withTransform = true }: { f: Feature; withTransform?
       return <>
         <Section title="Extrude">
           <Field label="Distance">
-            <NumberField value={f.distance} unit="mm" label="↕" min={-5000} max={5000}
-              onChange={(v, live) => edit(f.id, 'Change distance', (x) => { x.distance = v || 0.1; }, live)} onCommit={commit('Change distance')} />
+            <PNum f={f} path="distance" title="Change distance" unit="mm" label="↕" min={-5000} max={5000} nonZero />
           </Field>
           <Field label="Both sides" tip="Extrude equally up and down from the sketch.">
             <Toggle value={f.symmetric} onChange={(v) => edit(f.id, 'Symmetric', (x) => { x.symmetric = v; })} />
           </Field>
           <Field label="Round edges" tip="Rounds the top and bottom edges (a fillet).">
-            <NumberField value={f.roundEdges} unit="mm" label="◠" min={0} max={500} step={0.5}
-              onChange={(v, live) => edit(f.id, 'Round edges', (x) => { x.roundEdges = v; }, live)} onCommit={commit('Round edges')} />
+            <PNum f={f} path="roundEdges" title="Round edges" unit="mm" label="◠" min={0} max={500} step={0.5} />
           </Field>
           <SketchLink sketchId={f.sketchId} />
         </Section>
@@ -187,8 +276,7 @@ function FeatureEditor({ f, withTransform = true }: { f: Feature; withTransform?
             ]} />
           </Field>
           <Field label="Angle">
-            <NumberField value={f.angle} unit="°" label="∠" min={1} max={360} step={5}
-              onChange={(v, live) => edit(f.id, 'Change angle', (x) => { x.angle = v; }, live)} onCommit={commit('Change angle')} />
+            <PNum f={f} path="angle" title="Change angle" unit="°" label="∠" min={1} max={360} step={5} />
           </Field>
           <SketchLink sketchId={f.sketchId} />
         </Section>
@@ -224,13 +312,11 @@ function FeatureEditor({ f, withTransform = true }: { f: Feature; withTransform?
           ]} />
         </Field>
         <Field label="Count">
-          <NumberField value={f.count} integer min={1} max={200} label="#"
-            onChange={(v, live) => edit(f.id, 'Pattern count', (x) => { x.count = v; }, live)} onCommit={commit('Pattern count')} />
+          <PNum f={f} path="count" title="Pattern count" integer min={1} max={200} label="#" />
         </Field>
         {f.kind === 'linear' ? <>
           <Field label="Spacing">
-            <NumberField value={f.spacing} unit="mm" label="↔" min={-10000} max={10000}
-              onChange={(v, live) => edit(f.id, 'Pattern spacing', (x) => { x.spacing = v; }, live)} onCommit={commit('Pattern spacing')} />
+            <PNum f={f} path="spacing" title="Pattern spacing" unit="mm" label="↔" min={-10000} max={10000} />
           </Field>
           <Field label="Direction">
             <Segmented value={f.direction} onChange={(v) => edit(f.id, 'Pattern direction', (x) => { x.direction = v; })} options={[
@@ -239,8 +325,7 @@ function FeatureEditor({ f, withTransform = true }: { f: Feature; withTransform?
           </Field>
         </> : <>
           <Field label="Angle">
-            <NumberField value={f.angle} unit="°" label="∠" min={-360} max={360} step={15}
-              onChange={(v, live) => edit(f.id, 'Pattern angle', (x) => { x.angle = v; }, live)} onCommit={commit('Pattern angle')} />
+            <PNum f={f} path="angle" title="Pattern angle" unit="°" label="∠" min={-360} max={360} step={15} />
           </Field>
           <Field label="Axis">
             <Segmented value={f.axis} onChange={(v) => edit(f.id, 'Pattern axis', (x) => { x.axis = v; })} options={[
@@ -259,13 +344,17 @@ function FeatureEditor({ f, withTransform = true }: { f: Feature; withTransform?
           ]} />
         </Field>
         <Field label="Plane offset">
-          <NumberField value={f.offset} unit="mm" label="↔" onChange={(v, live) => edit(f.id, 'Mirror offset', (x) => { x.offset = v; }, live)} onCommit={commit('Mirror offset')} />
+          <PNum f={f} path="offset" title="Mirror offset" unit="mm" label="↔" />
         </Field>
         <Field label="Bodies"><div class="chips">{f.bodyIds.map((t) => <span key={t} class="chip">{bodyName(t)}</span>)}</div></Field>
       </Section>;
     case 'sketch':
       return <Section title="Sketch">
         <Field label="Plane"><span>{f.plane.label}</span></Field>
+        <Field label="Plane offset" tip="Slide the whole sketch along its plane's normal — e.g. raise it for a loft.">
+          <NumberField value={planeOffset(f.plane)} unit="mm" label="↕"
+            onChange={(v, live) => edit(f.id, 'Move sketch plane', (x) => { x.plane = withOffset(x.plane, v); }, live)} onCommit={commit('Move sketch plane')} />
+        </Field>
         <Field label="Shapes"><span>{f.entities.length}</span></Field>
         <div class="row-actions">
           <button class="btn small" onClick={() => A.editSketch(f.id)}><Pencil size={13} /> Edit</button>
@@ -275,6 +364,40 @@ function FeatureEditor({ f, withTransform = true }: { f: Feature; withTransform?
       </Section>;
     case 'import':
       return withTransform ? <TransformEditor fid={f.id} t={f.transform} /> : null;
+    case 'loft':
+      return <>
+        <LoftSections f={f} />
+        <OperationEditor f={f} />
+        {withTransform && <TransformEditor fid={f.id} t={f.transform} />}
+      </>;
+    case 'sweep':
+      return <>
+        <Section title="Sweep">
+          <Field label="Profile" tip="The closed shape that travels along the path.">
+            <SketchSelect value={f.profileId} before={f.id} onChange={(id) => edit(f.id, 'Sweep profile', (x) => { x.profileId = id; })} />
+          </Field>
+          <Field label="Path" tip="An open line or spline (or a loop) that the profile follows.">
+            <SketchSelect value={f.pathId} before={f.id} onChange={(id) => edit(f.id, 'Sweep path', (x) => { x.pathId = id; })} />
+          </Field>
+          <Field label="Twist" tip="Rotate the profile along the path — springs, drills, ropes.">
+            <PNum f={f} path="twist" title="Twist" unit="°" label="↻" step={15} min={-7200} max={7200} />
+          </Field>
+          <div class="row-actions"><button class="btn small" onClick={() => A.editSketch(f.pathId)}><Pencil size={13} /> Edit path</button><button class="btn small" onClick={() => A.editSketch(f.profileId)}><Pencil size={13} /> Edit profile</button></div>
+        </Section>
+        <OperationEditor f={f} />
+        {withTransform && <TransformEditor fid={f.id} t={f.transform} />}
+      </>;
+    case 'split':
+      return <Section title="Split body">
+        <Field label="Body"><span>{bodyName(f.bodyId)}</span></Field>
+        <Field label="Cut across" tip="The direction the cutting plane faces.">
+          <Segmented value={f.axis} onChange={(v) => edit(f.id, 'Split axis', (x) => { x.axis = v; })} options={[
+            { value: 'y', label: 'Height (Y)' }, { value: 'x', label: 'X' }, { value: 'z', label: 'Z' },
+          ]} />
+        </Field>
+        <Field label="Position"><PNum f={f} path="offset" title="Split position" unit="mm" label="↕" /></Field>
+        <div style={{ fontSize: 11.5, color: 'var(--text-3)', lineHeight: 1.5 }}>Splits the body into two parts at this plane — handy when a model is too big for your printer, or to print each half flat.</div>
+      </Section>;
   }
 }
 
@@ -377,7 +500,7 @@ function BodyInspector({ body }: { body: EvalBody }) {
       sub={`${shapeLabel ?? 'Body'}${combined ? ' · combined' : ''}`} />
     {editable && editable.id === source?.id && <FeatureEditor f={editable} />}
     {editable?.type === 'move' && <>{source && source.type !== 'move' && source.type !== 'pattern' && source.type !== 'mirror' && <FeatureEditor f={source} withTransform={false} />}<FeatureEditor f={editable} /></>}
-    {!editable && source && (source.type === 'primitive' || source.type === 'extrude' || source.type === 'revolve') && <FeatureEditor f={source} withTransform={false} />}
+    {!editable && source && (source.type === 'primitive' || source.type === 'extrude' || source.type === 'revolve' || source.type === 'loft' || source.type === 'sweep') && <FeatureEditor f={source} withTransform={false} />}
     {combined && beginner && (
       <div class="insp-section"><div class="hint-box"><Lightbulb size={16} /><span>This body has been combined. Dragging it adds a <b>Move</b> step to the timeline — earlier steps stay editable.</span></div></div>
     )}
@@ -441,7 +564,7 @@ function EntityEditor({ e }: { e: SketchEntity }) {
     </Field>
   );
   switch (e.kind) {
-    case 'rect': return <>{n('X', e.x, 'x')}{n('Y', e.y, 'y')}{n('Width', e.w, 'w', { min: 0.01 })}{n('Height', e.h, 'h', { min: 0.01 })}</>;
+    case 'rect': return <>{n('X', e.x, 'x')}{n('Y', e.y, 'y')}{n('Width', e.w, 'w', { min: 0.01 })}{n('Height', e.h, 'h', { min: 0.01 })}{n('Corner radius', e.radius ?? 0, 'radius', { min: 0 })}</>;
     case 'circle': return <>{n('Centre X', e.cx, 'cx')}{n('Centre Y', e.cy, 'cy')}{n('Diameter', e.r * 2, 'r', { min: 0.01, scale: 2 })}</>;
     case 'polygon': return <>{n('Centre X', e.cx, 'cx')}{n('Centre Y', e.cy, 'cy')}{n('Radius', e.r, 'r', { min: 0.01 })}{n('Sides', e.sides, 'sides', { min: 3, unit: '', integer: true })}{n('Rotation', e.rotation, 'rotation', { unit: '°' })}</>;
     case 'slot': return <>{n('Width', e.r * 2, 'r', { min: 0.01, scale: 2 })}</>;

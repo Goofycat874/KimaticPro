@@ -31,6 +31,8 @@ interface FeatureBase {
   id: string;
   name: string;
   suppressed?: boolean;
+  /** Dimension expressions using user parameters, keyed by field path (e.g. `params.width`). */
+  exprs?: Record<string, string>;
 }
 
 export interface PrimitiveFeature extends FeatureBase {
@@ -52,7 +54,7 @@ export interface PlaneDef {
 
 export type SketchEntity =
   | { id: string; kind: 'polyline'; points: Vec2[]; closed: boolean }
-  | { id: string; kind: 'rect'; x: number; y: number; w: number; h: number }
+  | { id: string; kind: 'rect'; x: number; y: number; w: number; h: number; radius?: number }
   | { id: string; kind: 'circle'; cx: number; cy: number; r: number }
   | { id: string; kind: 'polygon'; cx: number; cy: number; r: number; sides: number; rotation: number }
   | { id: string; kind: 'spline'; points: Vec2[]; closed: boolean }
@@ -125,6 +127,37 @@ export interface MirrorFeature extends FeatureBase {
   offset: number;
 }
 
+export interface LoftFeature extends FeatureBase {
+  type: 'loft';
+  /** Sketches to blend through, in order. Each contributes its largest closed shape. */
+  sketchIds: string[];
+  smooth: boolean;
+  op: BodyOp;
+  targets: string[];
+  transform: TRS;
+  appearance: Appearance;
+}
+
+export interface SweepFeature extends FeatureBase {
+  type: 'sweep';
+  /** Sketch with the closed cross-section (centred on the path). */
+  profileId: string;
+  /** Sketch whose first open curve (or loop) is the path. */
+  pathId: string;
+  twist: number;
+  op: BodyOp;
+  targets: string[];
+  transform: TRS;
+  appearance: Appearance;
+}
+
+export interface SplitFeature extends FeatureBase {
+  type: 'split';
+  bodyId: string;
+  axis: 'x' | 'y' | 'z';
+  offset: number;
+}
+
 export interface ImportFeature extends FeatureBase {
   type: 'import';
   /** Base64-encoded Float32Array of triangle positions (non-indexed). */
@@ -142,12 +175,15 @@ export type Feature =
   | MoveFeature
   | PatternFeature
   | MirrorFeature
-  | ImportFeature;
+  | ImportFeature
+  | LoftFeature
+  | SweepFeature
+  | SplitFeature;
 
 export type FeatureType = Feature['type'];
 
 /** Features whose transform directly positions the body they create. */
-export type CreatingFeature = PrimitiveFeature | ExtrudeFeature | RevolveFeature | ImportFeature;
+export type CreatingFeature = PrimitiveFeature | ExtrudeFeature | RevolveFeature | ImportFeature | LoftFeature | SweepFeature;
 
 export interface BodyState {
   visible?: boolean;
@@ -166,10 +202,12 @@ export interface DesignDoc {
   bodyState: Record<string, BodyState>;
   /** Index into features: everything at or after this is rolled back. */
   marker: number;
+  /** Named user parameters (Fusion-style), usable in any dimension. */
+  params?: { name: string; expr: string; comment?: string }[];
 }
 
 export const isCreating = (f: Feature): f is CreatingFeature =>
-  f.type === 'primitive' || f.type === 'extrude' || f.type === 'revolve' || f.type === 'import';
+  f.type === 'primitive' || f.type === 'extrude' || f.type === 'revolve' || f.type === 'import' || f.type === 'loft' || f.type === 'sweep';
 
 let idCounter = 0;
 export const uid = (prefix = 'f') =>

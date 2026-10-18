@@ -5,7 +5,7 @@ import {
   Ruler, Scissors, Eye, Download, Save, FolderOpen, Image, FilePlus2, Undo2, Redo2, Focus, House, Search,
   Keyboard, Sun, Moon, GraduationCap, Grid3x3, Layers2, Spline, RectangleHorizontal, Circle, Hexagon, MousePointer2,
   Check, Upload, ScanEye, Crosshair, Diamond, SquareDashed, Pill, Ghost, Printer, BedDouble, PanelBottom, LayoutGrid,
-  TriangleAlert, ClipboardCheck,
+  TriangleAlert, ClipboardCheck, Blend, SquareSplitVertical, Variable,
 } from 'lucide-preact';
 import { store } from '../core/store';
 import * as A from '../core/actions';
@@ -63,6 +63,9 @@ export const COMMANDS: Command[] = [
   { id: 'create.extrude', label: 'Extrude', group: 'Create', icon: ArrowUpFromLine, desc: 'Pull a closed sketch shape up into a solid.', key: 'E', run: () => A.extrude(), keywords: 'push pull' },
   { id: 'create.revolve', label: 'Revolve', group: 'Create', icon: RotateCw, desc: 'Spin a sketch profile around an axis — vases, cups, wheels.', run: () => A.revolve(), keywords: 'lathe spin' },
 
+  { id: 'create.loft', label: 'Loft', group: 'Create', icon: Blend, desc: 'Blend smoothly between two or more closed sketches on different planes or heights — vases, bottles, transitions.', run: () => A.addLoft(), keywords: 'blend transition morph' },
+  { id: 'create.sweep', label: 'Sweep', group: 'Create', icon: Spline, desc: 'Move a closed shape along a path — pipes, handles, rails, springs (with twist).', run: () => A.addSweep(), keywords: 'pipe path tube follow' },
+
   // modify
   { id: 'gizmo.translate', label: 'Move', group: 'Modify', icon: Move, desc: 'Drag the arrows to move the selection. Arrow keys nudge it.', key: 'G', run: () => store.set({ gizmo: 'translate' }), active: () => store.state.gizmo === 'translate' },
   { id: 'gizmo.rotate', label: 'Rotate', group: 'Modify', icon: Rotate3d, desc: 'Drag the rings to spin the selection (snaps to 15°).', key: 'R', run: () => store.set({ gizmo: 'rotate' }), active: () => store.state.gizmo === 'rotate' },
@@ -74,6 +77,8 @@ export const COMMANDS: Command[] = [
   { id: 'modify.pattern', label: 'Pattern', group: 'Modify', icon: Repeat, desc: 'Repeat the selection in a row.', run: () => A.addPattern('linear'), enabled: hasSel, keywords: 'array repeat copy row' },
   { id: 'modify.circular', label: 'Circular pattern', group: 'Modify', icon: Orbit, desc: 'Repeat the selection around a circle.', run: () => A.addPattern('circular'), enabled: hasSel, keywords: 'array radial' },
   { id: 'modify.mirror', label: 'Mirror', group: 'Modify', icon: FlipHorizontal2, desc: 'Make a mirror-image copy across a plane.', key: 'M', run: () => A.addMirror(), enabled: hasSel, keywords: 'flip symmetry' },
+  { id: 'modify.split', label: 'Split body', group: 'Modify', icon: SquareSplitVertical, desc: 'Cut a body into two parts with a plane — print big things in pieces.', run: () => A.addSplit(), enabled: () => store.state.selection.length === 1, keywords: 'cut half divide plane' },
+  { id: 'modify.params', label: 'Parameters', group: 'Modify', icon: Variable, desc: 'Name your key sizes (like wall = 2) and use them in any field: type “wall * 2”. Change one number, the whole design updates.', run: () => store.set({ dialog: 'params' }), keywords: 'variables formula expression dimension' },
   { id: 'arrange.drop', label: 'Drop to ground', group: 'Arrange', icon: ArrowDownToLine, desc: 'Sit the selection flat on the ground.', key: 'D', run: () => A.dropToGround(), enabled: hasSel, keywords: 'floor' },
   { id: 'arrange.center', label: 'Center', group: 'Arrange', icon: Crosshair, desc: 'Move the selection to the middle of the grid.', run: () => A.centerOnOrigin(), enabled: hasSel, keywords: 'origin' },
 

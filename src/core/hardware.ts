@@ -188,10 +188,4 @@ export function container(p: { width: number; height: number; depth: number; wal
   return op(outer, inner, 'sub');
 }
 
-/** Metric coarse pitch for common sizes. */
-export function metricPitch(d: number) {
-  const table: [number, number][] = [[2, 0.4], [2.5, 0.45], [3, 0.5], [4, 0.7], [5, 0.8], [6, 1], [8, 1.25], [10, 1.5], [12, 1.75], [16, 2], [20, 2.5], [24, 3]];
-  let best = table[0];
-  for (const t of table) if (Math.abs(t[0] - d) < Math.abs(best[0] - d)) best = t;
-  return best[1];
-}
+export { metricPitch } from './expr';

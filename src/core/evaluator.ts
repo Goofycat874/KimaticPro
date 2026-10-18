@@ -7,6 +7,8 @@ import { buildShape } from './primitives';
 import { planeMatrix, profileToShape, sketchProfiles } from './sketch';
 import { revolveProfiles } from './revolve';
 import { decodePositions, normalizeGeometry } from './geometry';
+import { evalExpr, resolveParams, setPath } from './expr';
+import { loftGeometry, mainLoop, sweepGeometry, sweepPath } from './loft';
 
 export interface EvalBody {
   id: string;
@@ -52,6 +54,21 @@ export interface EvalResult {
   frames: Record<string, THREE.Matrix4>;
   /** Bodies created by each feature. */
   outputs: Record<string, string[]>;
+  /** Current values of the user parameters. */
+  vars: Record<string, number>;
+  paramErrors: Record<string, string>;
+}
+
+/** Substitute parameter expressions into feature fields, without touching the document. */
+export function applyExpressions(features: Feature[], vars: Record<string, number>, errors: Record<string, string>): Feature[] {
+  return features.map((f) => {
+    if (!f.exprs || !Object.keys(f.exprs).length) return f;
+    const copy = JSON.parse(JSON.stringify(f));
+    for (const [path, expr] of Object.entries(f.exprs)) {
+      try { setPath(copy, path, evalExpr(expr, vars)); } catch (e: any) { errors[f.id] = `${path.split('.').pop()}: ${e.message}`; }
+    }
+    return copy;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -206,7 +223,8 @@ export function evaluate(doc: DesignDoc): EvalResult {
   const errors: Record<string, string> = {};
   const frames: Record<string, THREE.Matrix4> = {};
   const outputs: Record<string, string[]> = {};
-  const active = doc.features.slice(0, doc.marker);
+  const { vars, errors: paramErrors } = resolveParams(doc.params ?? []);
+  const active = applyExpressions(doc.features.slice(0, doc.marker), vars, errors);
 
   const applyOp = (fid: string, tool: EvalBody, op: BodyOp, targets: string[]) => {
     if (op === 'new') {
@@ -287,6 +305,57 @@ export function evaluate(doc: DesignDoc): EvalResult {
             sourceFeatureId: f.id, lastFeatureId: f.id, visible: visibleOf(f.id),
           };
           applyOp(f.id, body, f.op, f.targets);
+          break;
+        }
+        case 'loft':
+        case 'sweep': {
+          let key: string;
+          let make: () => THREE.BufferGeometry;
+          if (f.type === 'loft') {
+            const secs = f.sketchIds.map((id) => sketches.get(id)).filter(Boolean) as EvalSketch[];
+            const loops = secs.map((sk) => ({ loop: mainLoop(sk.entities), matrix: sk.matrix }));
+            if (loops.some((l) => !l.loop)) throw new Error('Every loft sketch needs a closed shape.');
+            key = hash(`loft|${f.smooth}|${secs.map((sk) => JSON.stringify(sk.entities) + matKey(sk.matrix)).join('|')}`);
+            // lofts are smooth surfaces: only draw edges at real creases
+            make = () => Object.assign(normalizeGeometry(loftGeometry(loops as any, f.smooth)), { userData: { edgeAngle: 60 } });
+          } else {
+            const prof = sketches.get(f.profileId), path = sketches.get(f.pathId);
+            if (!prof || !path) throw new Error('Pick a profile sketch and a path sketch.');
+            if (prof === path) throw new Error('The profile and the path must be different sketches.');
+            const profiles = sketchProfiles(prof.entities);
+            if (!profiles.length) throw new Error('The profile sketch needs a closed shape.');
+            key = hash(`sweep|${f.twist}|${JSON.stringify(prof.entities)}|${JSON.stringify(path.entities)}|${matKey(path.matrix)}`);
+            make = () => Object.assign(normalizeGeometry(sweepGeometry(profiles[0], sweepPath(path.entities, path.matrix), f.twist)), { userData: { edgeAngle: 50 } });
+          }
+          const geometry = cached(key, make);
+          frames[f.id] = new THREE.Matrix4();
+          applyOp(f.id, {
+            id: f.id, name: doc.bodyState[f.id]?.name ?? f.name, appearance: f.appearance, geometry, key,
+            matrix: trsMatrix(f.transform), editableFeatureId: f.id, sourceFeatureId: f.id, lastFeatureId: f.id,
+            visible: visibleOf(f.id),
+          }, f.op, f.targets);
+          break;
+        }
+        case 'split': {
+          const b = bodies.get(f.bodyId);
+          if (!b) throw new Error('The body to split no longer exists.');
+          const bb = bodyBounds(b);
+          const size = bb.getSize(new THREE.Vector3()).length() * 2 + 10;
+          const c = bb.getCenter(new THREE.Vector3());
+          // a huge box covering everything on the "high" side of the plane
+          const half = new THREE.BoxGeometry(size, size, size);
+          const centre = c.clone();
+          centre[f.axis] = f.offset + size / 2;
+          const tool = { key: `half|${f.axis}|${f.offset}|${size.toFixed(3)}`, geometry: cached(hash(`halfbox|${size.toFixed(3)}`), () => normalizeGeometry(half)), matrix: new THREE.Matrix4().makeTranslation(centre.x, centre.y, centre.z) };
+          const low = boolean(b, tool, 'cut');
+          const high = boolean(b, tool, 'intersect');
+          const id2 = `${f.id}:${f.bodyId}`;
+          bodies.set(f.bodyId, { ...b, geometry: low.geo, key: low.key, matrix: low.matrix, editableFeatureId: null, lastFeatureId: f.id });
+          bodies.set(id2, {
+            ...b, id: id2, name: doc.bodyState[id2]?.name ?? `${b.name} (part 2)`, geometry: high.geo, key: high.key, matrix: high.matrix,
+            editableFeatureId: null, sourceFeatureId: f.id, lastFeatureId: f.id, visible: visibleOf(id2),
+          });
+          outputs[f.id] = [id2];
           break;
         }
         case 'combine': {
@@ -397,6 +466,8 @@ export function evaluate(doc: DesignDoc): EvalResult {
     errors,
     frames,
     outputs,
+    vars,
+    paramErrors,
   };
   sweepCache(new Set([...result.bodies.map((b) => b.geometry), ...ghosts.map((g) => g.geometry)]));
   return result;

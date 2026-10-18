@@ -6,11 +6,26 @@ export function entityOutline(e: SketchEntity, segments = 64): { points: Vec2[];
   switch (e.kind) {
     case 'polyline':
       return { points: e.points, closed: e.closed };
-    case 'rect':
-      return {
-        points: [[e.x, e.y], [e.x + e.w, e.y], [e.x + e.w, e.y + e.h], [e.x, e.y + e.h]],
-        closed: true,
-      };
+    case 'rect': {
+      const r = Math.max(0, Math.min(e.radius ?? 0, e.w / 2 - 1e-4, e.h / 2 - 1e-4));
+      if (r <= 1e-4) {
+        return { points: [[e.x, e.y], [e.x + e.w, e.y], [e.x + e.w, e.y + e.h], [e.x, e.y + e.h]], closed: true };
+      }
+      // rounded corners, counter-clockwise from the bottom-right
+      const pts: Vec2[] = [];
+      const n = 10;
+      const corners: [number, number, number][] = [
+        [e.x + e.w - r, e.y + r, -Math.PI / 2], [e.x + e.w - r, e.y + e.h - r, 0],
+        [e.x + r, e.y + e.h - r, Math.PI / 2], [e.x + r, e.y + r, Math.PI],
+      ];
+      for (const [cx, cy, a0] of corners) {
+        for (let i = 0; i <= n; i++) {
+          const a = a0 + (i / n) * (Math.PI / 2);
+          pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
+        }
+      }
+      return { points: pts, closed: true };
+    }
     case 'circle': {
       const pts: Vec2[] = [];
       for (let i = 0; i < segments; i++) {

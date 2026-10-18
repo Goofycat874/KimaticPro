@@ -4,7 +4,8 @@ import type { SketchTool } from './store';
 import { bodyBounds, featureOf, trsMatrix, type EvalBody } from './evaluator';
 import { defaultParams, shapeById } from './primitives';
 import { nextColor } from './materials';
-import { STANDARD_PLANES } from './sketch';
+import { STANDARD_PLANES, entityOutline } from './sketch';
+import { evalExpr } from './expr';
 import { arrangeOnBed, layFlatQuaternion } from './printing';
 import {
   identityTRS, isCreating, uid,
@@ -496,8 +497,9 @@ export function createSketch(plane: PlaneDef) {
   viewApi.lookAtPlane?.(plane);
 }
 
-export function createSketchOnStandard(name: keyof typeof STANDARD_PLANES) {
-  createSketch(STANDARD_PLANES[name]);
+export function createSketchOnStandard(name: keyof typeof STANDARD_PLANES, offset = 0) {
+  const p = STANDARD_PLANES[name];
+  createSketch(offset ? { ...p, origin: p.normal.map((n) => n * offset) as Vec3, label: `${p.label} +${offset} mm` } : p);
 }
 
 export function editSketch(id: string) {
@@ -594,3 +596,77 @@ export function worldMatrixOfFeature(id: string): THREE.Matrix4 | null {
 }
 
 export type { MoveFeature };
+
+// ---------------------------------------------------------------------------
+// advanced modelling
+
+/** Sketches before the history marker, newest first. */
+function recentSketches(): SketchFeature[] {
+  return store.doc.features.slice(0, store.doc.marker).filter((f) => f.type === 'sketch').reverse() as SketchFeature[];
+}
+const hasClosed = (s: SketchFeature) => s.entities.some((e) => entityOutline(e).closed);
+const hasOpen = (s: SketchFeature) => s.entities.some((e) => (e.kind === 'polyline' || e.kind === 'spline') && !e.closed);
+
+export function addLoft() {
+  const secs = recentSketches().filter(hasClosed).slice(0, 2).reverse();
+  if (secs.length < 2) {
+    store.toast('Loft blends between shapes: draw two closed sketches on different planes or heights first.');
+    return;
+  }
+  const id = uid('lf');
+  store.commit('Loft', (doc) => {
+    insertFeature(doc, {
+      id, type: 'loft', name: nextName(doc, 'Loft'), sketchIds: secs.map((s) => s.id), smooth: true,
+      op: 'new', targets: [], transform: identityTRS(), appearance: { color: nextColor(), material: 'pla' },
+    });
+    for (const s of secs) (doc.features.find((f) => f.id === s.id) as SketchFeature).visible = false;
+  }, { selectedFeature: id, selection: [id], mode: 'model', sketchId: null });
+}
+
+export function addSweep() {
+  const sk = recentSketches();
+  const path = sk.find(hasOpen);
+  const profile = sk.find((s) => s !== path && hasClosed(s));
+  if (!path || !profile) {
+    store.toast('Sweep needs two sketches: a closed shape (the profile) and an open line or spline (the path).');
+    return;
+  }
+  const id = uid('sw');
+  store.commit('Sweep', (doc) => {
+    insertFeature(doc, {
+      id, type: 'sweep', name: nextName(doc, 'Sweep'), profileId: profile.id, pathId: path.id, twist: 0,
+      op: 'new', targets: [], transform: identityTRS(), appearance: { color: nextColor(), material: 'pla' },
+    });
+    for (const s of [path, profile]) (doc.features.find((f) => f.id === s.id) as SketchFeature).visible = false;
+  }, { selectedFeature: id, selection: [id], mode: 'model', sketchId: null });
+}
+
+export function addSplit() {
+  const ids = store.state.selection;
+  if (ids.length !== 1) { store.toast('Select one body to split — great for printing big parts in pieces.'); return; }
+  const b = bodyById(ids[0])!;
+  const c = bodyBounds(b).getCenter(new THREE.Vector3());
+  const id = uid('sp');
+  store.commit('Split', (doc) => {
+    insertFeature(doc, { id, type: 'split', name: nextName(doc, 'Split'), bodyId: b.id, axis: 'y', offset: round(c.y, 0.5) });
+  }, { selectedFeature: id, selection: [] });
+}
+
+/** Bind (or unbind with null) a parameter expression to a feature field. */
+export function setExpr(fid: string, path: string, expr: string | null): boolean {
+  if (expr) {
+    try { evalExpr(expr, store.state.result.vars); } catch (e: any) { store.toast(e.message, 'error'); return false; }
+  }
+  store.commit(expr ? 'Use parameter' : 'Remove formula', (doc) => {
+    const f = doc.features.find((x) => x.id === fid);
+    if (!f) return;
+    const exprs = { ...(f.exprs ?? {}) };
+    if (expr) exprs[path] = expr; else delete exprs[path];
+    f.exprs = exprs;
+  });
+  return true;
+}
+
+export function setParams(params: NonNullable<DesignDoc['params']>) {
+  store.commit('Change parameters', (doc) => { doc.params = params; });
+}

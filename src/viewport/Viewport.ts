@@ -31,7 +31,7 @@ const edgeCache = new WeakMap<THREE.BufferGeometry, THREE.BufferGeometry>();
 const NO_EDGES = new THREE.BufferGeometry();
 function edgesOf(g: THREE.BufferGeometry) {
   let e = edgeCache.get(g);
-  if (!e) { e = featureEdges(g, 28); edgeCache.set(g, e); }
+  if (!e) { e = featureEdges(g, g.userData.edgeAngle ?? 28); edgeCache.set(g, e); }
   return e;
 }
 

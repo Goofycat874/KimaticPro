@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import * as THREE from 'three';
-import { FilePlus2, FolderOpen, GraduationCap, X, Search, RotateCcw, CircleCheck, CircleAlert, Info, ArrowRight, Sparkles, Printer, Download } from 'lucide-preact';
+import { FilePlus2, FolderOpen, GraduationCap, X, Search, RotateCcw, CircleCheck, CircleAlert, Info, ArrowRight, Sparkles, Printer, Download, Variable } from 'lucide-preact';
+import { isValidName, resolveParams } from '../core/expr';
 import { analyzePrint, PRINTERS, printerById } from '../core/printing';
 import { store, emptyDoc, Store } from '../core/store';
 import { TEMPLATES } from '../core/templates';
 import { pickFile } from '../core/io';
-import { viewApi } from '../core/actions';
+import { setParams, viewApi } from '../core/actions';
 import { docThumbnail } from '../viewport/thumbnails';
 import { COMMANDS, runCmd } from './commands';
 import { Kbd } from './controls';
@@ -316,6 +317,56 @@ export function PrintDialog() {
             <span style={{ flex: 1, color: 'var(--text-3)', fontSize: 12 }}>3MF keeps exact millimetres, separate parts and colours. STL works everywhere.</span>
             <button class="btn" onClick={() => runCmd('export.stl')}><Download size={14} /> STL</button>
             <button class="btn primary" onClick={() => runCmd('export.3mf')}><Download size={14} /> Export 3MF</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ParamsDialog() {
+  const s = useStore((s) => ({ open: s.dialog === 'params', params: s.doc.params, vars: s.result.vars, errors: s.result.paramErrors, features: s.doc.features }));
+  const [rows, setRows] = useState<{ name: string; expr: string; comment?: string }[]>([]);
+  useEffect(() => { if (s.open) setRows(s.params?.length ? s.params.map((p) => ({ ...p })) : [{ name: 'wall', expr: '2', comment: 'Wall thickness' }]); }, [s.open]);
+  if (!s.open) return null;
+  const close = () => store.set({ dialog: null });
+  const live = resolveParams(rows);
+  const names = rows.map((r) => r.name);
+  const dupes = new Set(names.filter((n, i) => names.indexOf(n) !== i));
+  const invalid = rows.some((r) => !isValidName(r.name) || dupes.has(r.name) || live.errors[r.name]);
+  const usage = (name: string) => s.features.filter((f) => Object.values(f.exprs ?? {}).some((e) => new RegExp(`\\b${name}\\b`).test(e))).length;
+  const set = (i: number, patch: Partial<(typeof rows)[number]>) => setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  return (
+    <div class="modal-back" onClick={(e) => e.target === e.currentTarget && close()}>
+      <div class="modal params-dialog">
+        <div class="modal-head"><Variable size={20} style={{ color: '#a855f7' }} /><h2>Parameters</h2><button class="icon-btn" onClick={close}><X size={18} /></button></div>
+        <div class="modal-body">
+          <p class="sub" style={{ margin: '0 0 12px', color: 'var(--text-2)', lineHeight: 1.5 }}>
+            Give important sizes a name, then type that name (or a formula like <code>wall * 2</code>) into any size field. Change it here and every linked part updates — that's how pros make designs that adapt.
+          </p>
+          <div class="params-table">
+            <div class="ph">Name</div><div class="ph">Value or formula</div><div class="ph">Result</div><div class="ph">Note</div><div />
+            {rows.map((r, i) => {
+              const bad = !isValidName(r.name) || dupes.has(r.name);
+              const err = live.errors[r.name];
+              return [
+                <input key={`n${i}`} class={`text-input ${bad ? 'bad' : ''}`} value={r.name} onInput={(e) => set(i, { name: (e.currentTarget as HTMLInputElement).value.trim() })} onKeyDown={(e) => e.stopPropagation()} placeholder="name" />,
+                <input key={`e${i}`} class={`text-input mono ${err ? 'bad' : ''}`} value={r.expr} onInput={(e) => set(i, { expr: (e.currentTarget as HTMLInputElement).value })} onKeyDown={(e) => e.stopPropagation()} placeholder="e.g. 40 or width / 2" />,
+                <div key={`v${i}`} class="pv" title={err}>{err ? '⚠ ' + err : Number.isFinite(live.vars[r.name]) ? `${+live.vars[r.name].toFixed(4)}` : '—'}</div>,
+                <input key={`c${i}`} class="text-input" value={r.comment ?? ''} onInput={(e) => set(i, { comment: (e.currentTarget as HTMLInputElement).value })} onKeyDown={(e) => e.stopPropagation()} placeholder={usage(r.name) ? `used ${usage(r.name)}×` : 'optional'} />,
+                <button key={`d${i}`} class="mini-btn" onClick={() => setRows(rows.filter((_, j) => j !== i))} data-tip-title="Delete parameter"><X size={14} /></button>,
+              ];
+            })}
+          </div>
+          <div class="row-actions" style={{ marginTop: 10 }}>
+            <button class="btn small" onClick={() => setRows([...rows, { name: `p${rows.length + 1}`, expr: '10' }])}>+ Add parameter</button>
+          </div>
+          <div class="print-foot">
+            <span style={{ flex: 1, color: invalid ? 'var(--bad)' : 'var(--text-3)', fontSize: 12 }}>
+              {invalid ? 'Fix the highlighted names or formulas first (letters, numbers and _ only; no duplicates).' : 'Formulas can use + − × ÷ ^, brackets, sqrt(), sin() (degrees), min(), max() and earlier parameters.'}
+            </span>
+            <button class="btn" onClick={close}>Cancel</button>
+            <button class="btn primary" disabled={invalid} onClick={() => { setParams(rows.filter((r) => r.name)); close(); }}>Apply</button>
           </div>
         </div>
       </div>

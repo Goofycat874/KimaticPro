@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
+import { evalExpr, usesNames } from '../core/expr';
 
 const round = (v: number, step: number) => {
   const p = Math.max(0, -Math.floor(Math.log10(step || 1)));
@@ -21,6 +22,10 @@ export function NumberField(props: {
   min?: number;
   max?: number;
   integer?: boolean;
+  /** A parameter expression bound to this field (e.g. `width / 2`). */
+  expr?: string;
+  /** Called with an expression that uses parameter names, or null when a plain number replaces it. */
+  onExpr?: (expr: string | null) => boolean | void;
 }) {
   const { value, onChange, unit, label, labelClass, min = -1e9, max = 1e9, integer } = props;
   const step = props.step ?? (integer ? 1 : 1);
@@ -38,12 +43,18 @@ export function NumberField(props: {
 
   const commitText = () => {
     const src = text.trim().replace(/^=/, '');
-    let v = Number(src);
-    if (Number.isNaN(v) && /^[\d+\-*/().\s]+$/.test(src)) {
-      try { v = Function(`"use strict";return (${src})`)(); } catch { v = NaN; }
+    if (src === (props.expr ?? '')) return;
+    if (props.onExpr && usesNames(src)) {
+      // keep the formula; the design re-evaluates it whenever parameters change
+      if (props.onExpr(src) === false) setText(props.expr ?? String(value));
+      return;
     }
-    if (!Number.isNaN(v) && Number.isFinite(v)) onChange(clamp(v), false);
-    else setText(String(value));
+    let v = NaN;
+    try { v = evalExpr(src); } catch { v = NaN; }
+    if (!Number.isNaN(v) && Number.isFinite(v)) {
+      if (props.expr) props.onExpr?.(null);
+      onChange(clamp(v), false);
+    } else setText(props.expr ?? String(value));
   };
 
   const onPointerDown = (e: PointerEvent) => {
@@ -75,7 +86,13 @@ export function NumberField(props: {
       )}
       <input
         value={text}
-        onFocus={(e) => { setFocus(true); (e.currentTarget as HTMLInputElement).select(); }}
+        onFocus={(e) => {
+          setFocus(true);
+          // show the formula while editing
+          if (props.expr) setText(props.expr);
+          const el = e.currentTarget as HTMLInputElement;
+          setTimeout(() => el.select(), 0);
+        }}
         onBlur={() => { setFocus(false); commitText(); }}
         onInput={(e) => setText((e.currentTarget as HTMLInputElement).value)}
         onKeyDown={(e) => {
@@ -89,6 +106,7 @@ export function NumberField(props: {
           }
         }}
       />
+      {props.expr && !focus && <span class="fx" data-tip-title="Driven by a parameter" data-tip-desc={`= ${props.expr}. Click to edit the formula, or type a number to replace it.`}>ƒ</span>}
       {unit && <span class="unit">{unit}</span>}
     </div>
   );

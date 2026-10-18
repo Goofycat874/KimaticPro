@@ -5,12 +5,15 @@
 - 🧱 **Snap shapes together** — boxes, cylinders, spheres, cones, pyramids, tori, tubes, wedges, domes, capsules, prisms, stars, hearts, 3D text, gears and springs. Click to add or drag right where you want them.
 - 🕳️ **Holes in one click** — set any shape to *Hole* and it cuts whatever it touches. You can still move and resize the hole afterwards.
 - ✏️ **Sketch like a pro** — draw lines, rectangles, circles, polygons, slots and splines on any plane or flat face. Type exact sizes while drawing (`40,20` ⏎). Shapes inside shapes become holes automatically.
-- ⬆️ **Extrude & revolve** — turn sketches into solids, with rounded edges, symmetric extrudes and partial revolves.
+- ⬆️ **Extrude, revolve, loft & sweep** — turn sketches into solids: rounded edges, symmetric extrudes, partial revolves, smooth lofts through several sketches (vases, bottles) and sweeps along a path with optional twist (pipes, hooks, handles).
+- 🔩 **Printable hardware** — real metric threaded rods, bolts (hex/socket) and nuts with print tolerance, screw holes with counterbore/countersink (drop one on a face to drill it), and storage boxes.
+- 🧮 **Parameters** — name your key sizes (`wall = 2`) and type formulas like `wall * 2` into any size field. Change one number and the whole design follows.
 - ➕ **Join / Cut / Intersect** any bodies, **pattern** them in rows or circles, **mirror** them, align and drop them to the ground.
 - ⏳ **Parametric timeline** — every step is recorded. Click any step to change it and everything after it rebuilds. Drag the marker to rewind history, suppress steps, reorder your thinking.
+- 🖨️ **Print workspace** — pick your printer (Bambu, Prusa, Creality, Voron…) to see its build volume, highlight overhangs that need supports, *lay flat* any face onto the bed, auto-arrange parts, split big parts in two, and run a print check (fits the bed? floating parts? watertight? filament and time estimate). Export **3MF** (exact millimetres, separate parts, colours) or STL.
 - 📐 **Inspect** — measure point-to-point, slice the model with a section view, see size, volume, surface area and estimated mass for 12 real materials.
 - 🎨 **Looks great** — physically based materials (plastics, metals, wood, glass…), soft shadows, CAD-style edges, dark and light themes.
-- 💾 **Export** STL (3D printing), OBJ, GLB (games/AR) and PNG; save/open `.kimatic` project files; import STL/OBJ meshes. Your work auto-saves in the browser.
+- 💾 **Export** 3MF and STL (3D printing), OBJ, GLB (games/AR) and PNG; save/open `.kimatic` project files; import STL/OBJ meshes. Your work auto-saves in the browser.
 - 🎓 **Beginner friendly** — welcome templates, a guided tour, helpful tooltips on every button, contextual hints in the status bar, and a *Pro* mode with a compact ribbon when you outgrow them. `Ctrl+P` searches every command.
 
 ## Getting started
@@ -37,6 +40,7 @@ The production build is a static site — host `dist/` anywhere (GitHub Pages, N
 | Join / cut selected bodies | `Ctrl+J` / `Ctrl+K` |
 | Duplicate, copy, paste | `Ctrl+D`, `Ctrl+C`, `Ctrl+V` |
 | Measure | `I` |
+| Print check / overhangs / lay flat | `P` / `O` / `L` |
 | Fit view, home view | `F`, `Home` |
 | Search every tool | `Ctrl+P` |
 | All shortcuts | `?` |
@@ -53,6 +57,11 @@ src/
     primitives.ts    parametric shape library
     sketch.ts        sketch entities → closed profiles (with automatic holes)
     revolve.ts       capped revolve builder
+    loft.ts          loft and sweep builders
+    hardware.ts      threads, bolts, nuts, screw holes, containers
+    expr.ts          safe formula parser for user parameters
+    printing.ts      printer presets, print analysis, arrange, 3MF writer
+    meshcheck.ts     watertight check tolerant of boolean T-junctions
     actions.ts       every user operation as an undoable document edit
     store.ts         app state, undo/redo, autosave
     io.ts            STL / OBJ / GLB / PNG export, project files, mesh import

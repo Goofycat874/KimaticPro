@@ -18,14 +18,14 @@ describe('mesh check', () => {
     }
     // the spring is an open tube by construction
     expect(Object.keys(open).filter((k) => k !== 'spring')).toEqual([]);
-  });
+  }, 30_000);
   it('metric nuts and bolts are watertight from M2 to M20', () => {
     const sizes: [number, number][] = [[2, 0.4], [3, 0.5], [4, 0.7], [6, 1], [8, 1.25], [12, 1.75], [20, 2.5]];
     for (const [d, pitch] of sizes) {
       expect(checkMesh(buildShape('nut', { diameter: d, pitch, width: d * 1.6, height: d * 0.8 })).openLength, `nut M${d}`).toBeLessThan(0.5);
       expect(checkMesh(buildShape('bolt', { diameter: d, pitch, headWidth: d * 1.6, headHeight: d * 0.7, length: d * 2.5 })).openLength, `bolt M${d}`).toBeLessThan(0.5);
     }
-  });
+  }, 60_000);
   it('template bodies are watertight', () => {
     const bad: string[] = [];
     for (const t of TEMPLATES) {

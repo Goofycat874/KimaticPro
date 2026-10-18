@@ -1,6 +1,7 @@
 import { emptyDoc } from './store';
 import type { BodyOp, DesignDoc, Feature, PrimitiveFeature, Vec2, Vec3 } from './types';
 import { STANDARD_PLANES } from './sketch';
+import type { PlaneDef } from './types';
 
 let n = 0;
 const id = (p: string) => `${p}_${(n++).toString(36)}`;
@@ -121,6 +122,57 @@ export const TEMPLATES: Template[] = [
         { id: pb, type: 'pattern', name: 'Stud grid', bodyIds: rowIds, kind: 'linear', count: 2, spacing: 8, direction: 'z', angle: 360, axis: 'y', center: [0, 0, 0] },
         { id: id('c'), type: 'combine', name: 'Join studs', targetId: 'brick', toolIds: studs.filter((s) => s !== 'brick'), op: 'join', keepTools: false },
         prim('box', 'Hollow', { width: 29.6, height: 8.4, depth: 13.6, round: 0 }, [0, -0.01, 0], '#ef4444', { op: 'cut', targets: ['brick'] }),
+      ]);
+    },
+  },
+  {
+    id: 'vase', name: 'Twisty Vase', level: 'Medium',
+    description: 'A smooth loft through three sketches, hollowed by a second loft.',
+    build: () => {
+      const at = (y: number): PlaneDef => ({ ...STANDARD_PLANES.top, origin: [0, y, 0], label: `Ground +${y} mm` });
+      const sk = (id: string, y: number, entities: any[]): Feature => ({ id, type: 'sketch', name: `Section ${id.slice(-1)}`, plane: at(y), visible: false, entities });
+      return make('Twisty Vase', [
+        sk('va1', 0, [{ id: 'a', kind: 'polygon', cx: 0, cy: 0, r: 28, sides: 6, rotation: 0 }]),
+        sk('va2', 45, [{ id: 'a', kind: 'circle', cx: 0, cy: 0, r: 36 }]),
+        sk('va3', 100, [{ id: 'a', kind: 'polygon', cx: 0, cy: 0, r: 20, sides: 6, rotation: 30 }]),
+        { id: 'vase', type: 'loft', name: 'Vase', sketchIds: ['va1', 'va2', 'va3'], smooth: true, op: 'new', targets: [], transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] }, appearance: { color: '#14b8a6', material: 'resin' } },
+        sk('vb1', 3, [{ id: 'a', kind: 'polygon', cx: 0, cy: 0, r: 25.5, sides: 6, rotation: 0 }]),
+        sk('vb2', 45, [{ id: 'a', kind: 'circle', cx: 0, cy: 0, r: 33.5 }]),
+        sk('vb3', 101, [{ id: 'a', kind: 'polygon', cx: 0, cy: 0, r: 17.5, sides: 6, rotation: 30 }]),
+        { id: 'inner', type: 'loft', name: 'Hollow', sketchIds: ['vb1', 'vb2', 'vb3'], smooth: true, op: 'cut', targets: ['vase'], transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] }, appearance: { color: '#ef4444', material: 'pla' } },
+      ]);
+    },
+  },
+  {
+    id: 'boltnut', name: 'Bolt & Nut', level: 'Pro',
+    description: 'Printable metric threads. Change the “size” parameter and both update.',
+    build: () => {
+      const doc = make('Bolt & Nut', [
+        { ...prim('bolt', 'Bolt', { diameter: 8, pitch: 1.25, length: 25, head: 'hex', headHeight: 5.5, headWidth: 13 }, [-14, 0, 0], '#64748b', { material: 'pla' }),
+          exprs: { 'params.diameter': 'size', 'params.pitch': 'metric_pitch(size)', 'params.headWidth': 'size * 1.6', 'params.headHeight': 'size * 0.7' } },
+        { ...prim('nut', 'Nut', { diameter: 8, pitch: 1.25, height: 6.5, width: 13, tolerance: 0.3 }, [14, 0, 0], '#f59e0b', { material: 'pla' }),
+          exprs: { 'params.diameter': 'size', 'params.pitch': 'metric_pitch(size)', 'params.width': 'size * 1.6', 'params.height': 'size * 0.8', 'params.tolerance': 'clearance' } },
+      ]);
+      doc.params = [
+        { name: 'size', expr: '8', comment: 'Thread diameter (M-size)' },
+        { name: 'clearance', expr: '0.3', comment: 'Extra room for printing' },
+      ];
+      return doc;
+    },
+  },
+  {
+    id: 'hook', name: 'Wall Hook', level: 'Pro',
+    description: 'A rounded profile swept along a curved path, with screw holes.',
+    build: () => {
+      // the right plane's u axis points to -Z, so negative u comes out of the wall (+Z)
+      const path: Vec2[] = [[0, 6], [0, 52], [-6, 64], [-20, 66], [-30, 57], [-30, 46]];
+      return make('Wall Hook', [
+        { id: 'hookpath', type: 'sketch', name: 'Hook path', plane: STANDARD_PLANES.right, visible: false, entities: [{ id: 'p', kind: 'spline', points: path, closed: false }] },
+        { id: 'hookprof', type: 'sketch', name: 'Hook profile', plane: STANDARD_PLANES.top, visible: false, entities: [{ id: 'r', kind: 'rect', x: -6, y: -3, w: 12, h: 6, radius: 2.5 }] },
+        { id: 'hook', type: 'sweep', name: 'Hook', profileId: 'hookprof', pathId: 'hookpath', twist: 0, op: 'new', targets: [], transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] }, appearance: { color: '#8b5cf6', material: 'pla' } },
+        prim('box', 'Wall plate', { width: 30, height: 64, depth: 4, round: 1.5 }, [0, 0, -2], '#8b5cf6', { op: 'join', targets: ['hook'], id: 'plate' }),
+        prim('screwhole', 'Screw hole', { diameter: 3.4, depth: 10, head: 'countersink', headDiameter: 7, headDepth: 3 }, [-10, 30, 0], '#ef4444', { op: 'cut', targets: ['hook'], rotation: [90, 0, 0] }),
+        prim('screwhole', 'Screw hole 2', { diameter: 3.4, depth: 10, head: 'countersink', headDiameter: 7, headDepth: 3 }, [10, 30, 0], '#ef4444', { op: 'cut', targets: ['hook'], rotation: [90, 0, 0] }),
       ]);
     },
   },

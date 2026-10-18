@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
-import { ChevronDown, Shapes, Check, ArrowUpFromLine, RotateCw, Trash2, AlignCenterHorizontal, Magnet } from 'lucide-preact';
+import { ChevronDown, Shapes, Check, ArrowUpFromLine, RotateCw, Trash2, AlignCenterHorizontal, Magnet, Blend, Spline } from 'lucide-preact';
 import { store } from '../core/store';
 import { align, addShape } from '../core/actions';
 import { SHAPES, type ShapeCategory } from '../core/primitives';
@@ -166,6 +166,12 @@ function SketchRibbon() {
         <button class="tool good-tool" onClick={() => cmd('create.revolve').run()} data-tip-title="Revolve" data-tip-desc="Finish the sketch and spin it around its vertical axis.">
           <span class="tool-icon"><RotateCw size={21} /></span><span class="tool-label">Revolve</span>
         </button>
+        <button class="tool good-tool" onClick={() => cmd('create.loft').run()} data-tip-title="Loft" data-tip-desc={cmd('create.loft').desc}>
+          <span class="tool-icon"><Blend size={21} /></span><span class="tool-label">Loft</span>
+        </button>
+        <button class="tool good-tool" onClick={() => cmd('create.sweep').run()} data-tip-title="Sweep" data-tip-desc={cmd('create.sweep').desc}>
+          <span class="tool-icon"><Spline size={21} /></span><span class="tool-label">Sweep</span>
+        </button>
       </Group>
       <Group label="Exit">
         <button class="tool good-tool" onClick={() => cmd('sketch.finish').run()} data-tip-title="Finish sketch" data-tip-key="Enter" data-tip-desc="Leave sketch mode.">
@@ -221,6 +227,8 @@ export function Ribbon() {
               <div data-tour="sketch" style={{ display: 'flex' }}><Tool id="create.sketch" /></div>
               <Tool id="create.extrude" />
               <Tool id="create.revolve" />
+              <Tool id="create.loft" />
+              <Tool id="create.sweep" />
             </Group>
             <Group label="Combine">
               <Tool id="modify.join" cls="good-tool" />
@@ -250,6 +258,10 @@ export function Ribbon() {
               <Tool id="modify.circular" label="Circular" />
               <Tool id="modify.mirror" />
               <Tool id="edit.duplicate" />
+            </Group>
+            <Group label="Shape">
+              <Tool id="modify.split" label="Split" />
+              <Tool id="modify.params" />
             </Group>
             <Group label="Arrange">
               <Tool id="arrange.drop" label="To ground" />

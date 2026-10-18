@@ -69,14 +69,18 @@ function GizmoBar() {
 
 function Banner() {
   const s = useStore((s) => ({ mode: s.mode, sketchId: s.sketchId, doc: s.doc, measure: s.measure }));
+  const [offset, setOffset] = useState(0);
   if (s.mode === 'pick-plane') {
     return (
       <div class="banner">
         <PenLine size={17} style={{ color: 'var(--good)' }} />
         <div><div class="b-title">Where do you want to draw?</div><div class="b-sub">Click a plane, or any flat face of a body.</div></div>
-        <button class="btn small" onClick={() => A.createSketchOnStandard('top')} style={{ borderColor: '#22c55e' }}>Ground</button>
-        <button class="btn small" onClick={() => A.createSketchOnStandard('front')} style={{ borderColor: '#3b82f6' }}>Front</button>
-        <button class="btn small" onClick={() => A.createSketchOnStandard('right')} style={{ borderColor: '#ef4444' }}>Right</button>
+        <button class="btn small" onClick={() => A.createSketchOnStandard('top', offset)} style={{ borderColor: '#22c55e' }}>Ground</button>
+        <button class="btn small" onClick={() => A.createSketchOnStandard('front', offset)} style={{ borderColor: '#3b82f6' }}>Front</button>
+        <button class="btn small" onClick={() => A.createSketchOnStandard('right', offset)} style={{ borderColor: '#ef4444' }}>Right</button>
+        <label class="offset-in" data-tip-title="Plane offset" data-tip-desc="Lift the sketch plane off the origin — stack sketches at different heights for a loft.">
+          offset <input type="number" value={offset} step={5} onInput={(e) => setOffset(Number((e.currentTarget as HTMLInputElement).value) || 0)} onKeyDown={(e) => e.stopPropagation()} /> mm
+        </label>
         <button class="icon-btn" onClick={() => store.set({ mode: 'model' })} data-tip-title="Cancel" data-tip-key="Escape"><X size={16} /></button>
       </div>
     );
