@@ -3,7 +3,7 @@ import { store } from '../core/store';
 import type { EvalBody, EvalResult } from '../core/evaluator';
 import { matKey } from '../core/evalCore';
 import type { DesignDoc } from '../core/types';
-import type { DrawingPayload, EvalPayload, MeshPayload, PropsPayload, Request, Response } from './protocol';
+import type { DrawingPayload, EvalPayload, MassPayload, MeshPayload, Request, Response } from './protocol';
 import type { ViewName } from '../core/drawingSheet';
 
 export type KernelStatus = 'off' | 'loading' | 'ready' | 'busy' | 'error';
@@ -104,9 +104,10 @@ class KernelClient {
     return this.call<DrawingPayload>({ type: 'drawing', doc, ids, views });
   }
 
-  async props(doc: DesignDoc, ids: string[]) {
-    if (!this.available) return [];
-    return this.call<PropsPayload[]>({ type: 'props', doc, ids });
+  /** Exact mass properties, or null while the precise engine isn't running. */
+  async props(doc: DesignDoc, ids: string[]): Promise<MassPayload | null> {
+    if (!this.available) return null;
+    return this.call<MassPayload>({ type: 'props', doc, ids });
   }
 }
 

@@ -4,7 +4,8 @@ import opencascade from 'replicad-opencascadejs';
 import wasmUrl from 'replicad-opencascadejs/wasm?url';
 import { runFeatures, type CoreResult } from '../core/evalCore';
 import { brepKernel, exportStep, importStepText, solidGeometry, type BSolid } from './brep';
-import type { BodyPayload, DrawingPayload, EvalPayload, GhostPayload, MeshPayload, PropsPayload, Request } from './protocol';
+import type { BodyPayload, DrawingPayload, EvalPayload, GhostPayload, MeshPayload, Request } from './protocol';
+import { massProperties } from './massProps';
 import { projectBodies } from './projection';
 import { encodePositions } from '../core/geometry';
 import type { DesignDoc } from '../core/types';
@@ -112,16 +113,7 @@ async function handle(req: Request): Promise<any> {
     }
     case 'props': {
       const r = evaluateDoc(req.doc);
-      const out: PropsPayload[] = [];
-      for (const b of r.bodies) {
-        if (!req.ids.includes(b.id) || b.solid.kind !== 'brep') continue;
-        const s = b.solid.shape;
-        const scale = Math.cbrt(Math.abs(b.matrix.determinant()));
-        const c = (R.measureShapeVolumeProperties(s) as any).centerOfMass as [number, number, number];
-        const center = c ? [c[0], c[1], c[2]] as [number, number, number] : [0, 0, 0] as [number, number, number];
-        out.push({ id: b.id, volume: R.measureVolume(s) * scale ** 3, area: R.measureArea(s) * scale ** 2, center });
-      }
-      return out;
+      return massProperties(r.bodies.filter((b) => req.ids.includes(b.id)).map((b) => ({ name: b.name, solid: b.solid, matrix: b.matrix, material: b.appearance.material })));
     }
   }
 }

@@ -77,3 +77,18 @@ describe('loft / sweep / split', () => {
     near(b, 20 * 20 * 30, 0.001);
   });
 });
+
+describe('units in typed values', () => {
+  it('converts lengths to millimetres', () => {
+    expect(evalExpr('2in')).toBeCloseTo(50.8);
+    expect(evalExpr('3/8"')).toBeCloseTo(9.525);
+    expect(evalExpr('1.5cm + 2mm')).toBeCloseTo(17);
+    expect(evalExpr('0.1m')).toBeCloseTo(100);
+    expect(evalExpr('1ft')).toBeCloseTo(304.8);
+    expect(evalExpr('45deg')).toBe(45);
+    expect(evalExpr('2 * min(1in, 30)')).toBeCloseTo(50.8);
+    expect(evalExpr('(1 + 1)in')).toBeCloseTo(50.8);
+    expect(evalExpr('1 + 1/2in')).toBeCloseTo(13.7);
+    expect(evalExpr('w / 2', { w: 10 })).toBe(5);
+  });
+});

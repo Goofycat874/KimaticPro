@@ -1,4 +1,6 @@
-import { useMemo } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
+import { kernel } from '../kernel/client';
+import type { MassPayload } from '../kernel/protocol';
 import * as THREE from 'three';
 import {
   Box, PenLine, Copy, ArrowDownToLine, EyeOff, Trash2, Lightbulb, TriangleAlert, Pencil, ArrowUpFromLine, RotateCw,
@@ -474,6 +476,7 @@ function Appearance({ ids }: { ids: string[] }) {
 }
 
 function Physical({ bodies }: { bodies: EvalBody[] }) {
+  const key = bodies.map((b) => b.key + b.matrix.elements.join()).join('|') + bodies.map((b) => b.appearance.material).join();
   const stats = useMemo(() => {
     let vol = 0, area = 0, mass = 0, tris = 0;
     const box = new THREE.Box3();
@@ -486,15 +489,35 @@ function Physical({ bodies }: { bodies: EvalBody[] }) {
       box.union(bodyBounds(b));
     }
     return { vol, area, mass, tris, size: box.getSize(new THREE.Vector3()) };
-  }, [bodies.map((b) => b.key + b.matrix.elements.join()).join('|'), bodies.map((b) => b.appearance.material).join()]);
+  }, [key]);
+  // exact numbers from the precise engine replace the mesh estimates when they arrive
+  const [exact, setExact] = useState<{ key: string; p: MassPayload } | null>(null);
+  useEffect(() => {
+    let live = true;
+    const t = setTimeout(() => {
+      kernel.props(store.doc, bodies.map((b) => b.id)).then((p) => { if (live && p && p.mass > 0) setExact({ key, p }); }).catch(() => {});
+    }, 250);
+    return () => { live = false; clearTimeout(t); };
+  }, [key]);
+  const x = exact?.key === key && !exact.p.skipped.length ? exact.p : null;
+  const vol = x ? x.volume : stats.vol, area = x ? x.area : stats.area, mass = x ? x.mass : stats.mass;
+  // inertia: g·mm² → kg·mm²
+  const kgmm2 = (v: number) => (v / 1000).toPrecision(4);
   return (
-    <Section title="Measurements">
+    <Section title="Measurements" right={x ? <span class="dof-chip ok" data-tip-title="Exact" data-tip-desc="Measured on the exact B-rep solid, not the display mesh.">Exact</span> : undefined}>
       <div class="stats">
         <div class="stat" style={{ gridColumn: '1 / -1' }}><div class="k">Size (W × H × D)</div><div class="v">{fmt(stats.size.x)} × {fmt(stats.size.y)} × {fmt(stats.size.z)} mm</div></div>
-        <div class="stat"><div class="k">Volume</div><div class="v">{fmt(stats.vol / 1000)} cm³</div></div>
-        <div class="stat"><div class="k">Mass</div><div class="v">{fmt(stats.mass)} g</div></div>
-        <div class="stat"><div class="k">Surface</div><div class="v">{fmt(stats.area / 100)} cm²</div></div>
+        <div class="stat"><div class="k">Volume</div><div class="v">{fmt(vol / 1000)} cm³</div></div>
+        <div class="stat"><div class="k">Mass</div><div class="v">{fmt(mass)} g</div></div>
+        <div class="stat"><div class="k">Surface</div><div class="v">{fmt(area / 100)} cm²</div></div>
         <div class="stat"><div class="k">Triangles</div><div class="v">{stats.tris.toLocaleString()}</div></div>
+        {x && <>
+          <div class="stat" style={{ gridColumn: '1 / -1' }}><div class="k">Centre of mass (X, Y, Z)</div><div class="v">{x.center.map(fmt).join(', ')} mm</div></div>
+          <div class="stat" style={{ gridColumn: '1 / -1' }} data-tip-title="Principal moments of inertia" data-tip-desc="About the centre of mass, using each body’s material density.">
+            <div class="k">Principal inertia (kg·mm²)</div><div class="v">{x.principal.map(kgmm2).join(' · ')}</div>
+          </div>
+          <div class="stat" style={{ gridColumn: '1 / -1' }}><div class="k">Ixx · Iyy · Izz (kg·mm²)</div><div class="v">{[0, 1, 2].map((i) => kgmm2(x.inertia[i][i])).join(' · ')}</div></div>
+        </>}
       </div>
     </Section>
   );

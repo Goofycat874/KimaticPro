@@ -132,3 +132,25 @@ describe('sketches with joined curves and constraints', () => {
     expect(Math.round((bb.max.z - bb.min.z) * 1000) / 1000).toBe(20);
   });
 });
+
+describe('exact mass properties', () => {
+  it('matches the textbook box: mass, centre and inertia, combined across bodies', async () => {
+    const { massProperties } = await import('../src/kernel/massProps');
+    const box = (id: string, x: number): Feature => ({ id, type: 'primitive', name: id, shape: 'box', params: { width: 10, height: 20, depth: 30, round: 0 }, transform: { ...identityTRS(), position: [x, 0, 0] }, op: 'new', targets: [], appearance: app });
+    const r = runFeatures(brepKernel, doc([box('a', 0)]));
+    const b = r.bodies[0];
+    const p = massProperties([{ name: 'a', solid: b.solid, matrix: b.matrix, material: 'pla' }]);
+    const m = 6000 * 1.24 / 1000;
+    expect(p.volume).toBeCloseTo(6000, 3);
+    expect(p.mass).toBeCloseTo(m, 6);
+    expect(p.center[1]).toBeCloseTo(10, 6); // boxes sit on the ground
+    expect(p.inertia[0][0]).toBeCloseTo((m / 12) * (20 ** 2 + 30 ** 2), 3);
+    expect(p.inertia[1][1]).toBeCloseTo((m / 12) * (10 ** 2 + 30 ** 2), 3);
+    expect(p.principal[0]).toBeCloseTo((m / 12) * (10 ** 2 + 20 ** 2), 3);
+    // two boxes 40 mm apart: parallel axis theorem about the shared centre
+    const two = runFeatures(brepKernel, doc([box('a', -20), box('b', 20)]));
+    const q = massProperties(two.bodies.map((x) => ({ name: x.name, solid: x.solid, matrix: x.matrix, material: 'pla' })));
+    expect(q.center[0]).toBeCloseTo(0, 6);
+    expect(q.inertia[1][1]).toBeCloseTo(2 * ((m / 12) * (10 ** 2 + 30 ** 2) + m * 400), 2);
+  });
+});

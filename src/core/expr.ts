@@ -22,6 +22,9 @@ const FUNCS: Record<string, (...a: number[]) => number> = {
 };
 const CONSTS: Record<string, number> = { pi: Math.PI, PI: Math.PI, e: Math.E };
 
+/** Length units you can type after a number, in millimetres. */
+const UNITS: Record<string, number> = { mm: 1, cm: 10, m: 1000, in: 25.4, '"': 25.4, ft: 304.8 };
+
 type Tok = { t: 'num'; v: number } | { t: 'id'; v: string } | { t: 'op'; v: string };
 
 function lex(src: string): Tok[] {
@@ -33,10 +36,17 @@ function lex(src: string): Tok[] {
     if (/[0-9.]/.test(c)) {
       const m = /^(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?/.exec(src.slice(i));
       if (!m) throw new Error(`Bad number near “${src.slice(i, i + 5)}”`);
-      out.push({ t: 'num', v: parseFloat(m[0]) });
       i += m[0].length;
-      // allow a trailing unit like 10mm or 45deg
-      const u = /^(mm|deg|°)/.exec(src.slice(i));
+      // a trailing unit converts to millimetres: 10mm, 2in, 3/8", 1.5cm, 0.1m, 2ft, 45deg
+      const u = /^(?:(mm|cm|in|ft|m|deg)(?![A-Za-z0-9_])|(°|"))/.exec(src.slice(i));
+      const unit = u ? (u[1] ?? u[2]) : '';
+      const k = UNITS[unit] ?? 1;
+      const n = out.length;
+      // 3/8" means three-eighths of an inch: scale the numerator of a plain fraction
+      if (k !== 1 && n >= 2 && out[n - 1].t === 'op' && out[n - 1].v === '/' && out[n - 2].t === 'num' && !(n >= 3 && out[n - 3].t === 'op' && /[*/^%]/.test(String(out[n - 3].v)))) {
+        (out[n - 2] as { v: number }).v *= k;
+        out.push({ t: 'num', v: parseFloat(m[0]) });
+      } else out.push({ t: 'num', v: parseFloat(m[0]) * k });
       if (u) i += u[0].length;
       continue;
     }
@@ -46,7 +56,16 @@ function lex(src: string): Tok[] {
       i += m[0].length;
       continue;
     }
-    if ('+-*/^%(),'.includes(c)) { out.push({ t: 'op', v: c }); i++; continue; }
+    if ('+-*/^%(),'.includes(c)) {
+      out.push({ t: 'op', v: c });
+      i++;
+      // (a + b)in → (a + b) * 25.4
+      if (c === ')') {
+        const u = /^(?:(mm|cm|in|ft|m)(?![A-Za-z0-9_])|("))/.exec(src.slice(i));
+        if (u) { out.push({ t: 'op', v: '*' }, { t: 'num', v: UNITS[u[1] ?? u[2]] }); i += u[0].length; }
+      }
+      continue;
+    }
     throw new Error(`Unexpected “${c}”`);
   }
   return out;

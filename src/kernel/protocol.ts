@@ -36,11 +36,15 @@ export interface EvalPayload {
   ms: number;
 }
 
-export interface PropsPayload {
-  id: string;
+/** Exact mass properties: mm³, mm², grams, mm, and inertia in g·mm² about the centre of mass. */
+export interface MassPayload {
   volume: number;
   area: number;
+  mass: number;
   center: [number, number, number];
+  inertia: number[][];
+  principal: [number, number, number];
+  skipped: string[];
 }
 
 export type Request =
