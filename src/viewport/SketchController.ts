@@ -4,12 +4,13 @@ import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { store } from '../core/store';
 import {
-  addDimension, addSketchEntity, parseRefKey, pickForConstraint, refKey, setDimension, setDimensionOffset, setSketchEntities, updateSketchEntity,
+  addDimension, addSketchEntity, parseRefKey, pickForConstraint, refKey, setDimension, setDimensionOffset, setSketchEntities, sketchFillet, sketchTrim, updateSketchEntity,
 } from '../core/actions';
 import { arcThrough, entityCircle, entityLines, entityOutline, entityPoints, entitySnapPoints, planeMatrix, profileToShape, sketchProfiles } from '../core/sketch';
 import { ORIGIN, analyzeSketch, dragRef, isDimension, keepKeys, measure, refCircle, refLine, refPoint, solveSketch, withValues } from '../core/constraints';
 import { uid, type ConstraintType, type SketchConstraint, type SketchEntity, type SketchFeature, type SkRef, type Vec2 } from '../core/types';
 import { featureOf } from '../core/evaluator';
+import { trimPreview } from '../core/sketchEdit';
 import { createGrid } from './grid';
 
 export interface SketchHost {
@@ -71,6 +72,7 @@ export class SketchController {
   private hoverRef: SkRef | null = null;
   private hoverRefs: SkRef[] = [];
   private dimPicks: SkRef[] = [];
+  private trimHover: Vec2[] | null = null;
 
   constructor(private host: SketchHost) {
     this.group.add(this.display, this.hoverGroup, this.draftGroup, this.grid.mesh);
@@ -583,8 +585,10 @@ export class SketchController {
     const tol = 8 / this.pxPerUnit();
     const ents = this.entities;
     let best: SkRef | null = null, bestD = tol;
-    const pts: [Vec2, SkRef][] = [[[0, 0], { e: ORIGIN, p: 0 }]];
+    // shape points come first so they win over the origin when they sit on it
+    const pts: [Vec2, SkRef][] = [];
     for (const e of ents) entityPoints(e).forEach((p, i) => { if (e.kind !== 'polygon' || i === 0) pts.push([p, { e: e.id, p: i }]); });
+    pts.push([[0, 0], { e: ORIGIN, p: 0 }]);
     for (const [p, r] of pts) { const d = dist(p, at); if (d < bestD) { bestD = d; best = r; } }
     if (best) return best;
     bestD = tol;
@@ -610,6 +614,21 @@ export class SketchController {
     return null;
   }
 
+  /** A segment or curve under the cursor, ignoring end points (for trimming near a corner). */
+  private hitCurve(at: Vec2): SkRef | null {
+    const tol = 8 / this.pxPerUnit();
+    let best: SkRef | null = null, bestD = tol;
+    for (const e of this.entities) {
+      const lines = entityLines(e);
+      lines.forEach(([a, b], s) => { const d = segDist(at, a, b); if (d < bestD) { bestD = d; best = { e: e.id, s }; } });
+      if (lines.length && e.kind !== 'slot') continue;
+      const o = entityOutline(e, 64);
+      const ps = o.closed ? [...o.points, o.points[0]] : o.points;
+      for (let i = 0; i < ps.length - 1; i++) { const d = segDist(at, ps[i], ps[i + 1]); if (d < bestD) { bestD = d; best = { e: e.id }; } }
+    }
+    return best;
+  }
+
   private setHover(r: SkRef | null) {
     const same = r && this.hoverRef ? refKey(r) === refKey(this.hoverRef) : r === this.hoverRef;
     if (same) return;
@@ -621,11 +640,21 @@ export class SketchController {
     const raw = this.planeHit(e);
     if (!raw) return;
     const tool = store.state.sketchTool;
-    this.cursor = tool === 'select' || tool === 'constrain' || tool === 'dimension' ? raw : this.snap(raw);
+    const picking = tool === 'select' || tool === 'constrain' || tool === 'dimension' || tool === 'trim' || tool === 'fillet';
+    this.cursor = picking ? raw : this.snap(raw);
     if (this.labelDrag) return;
     if (this.drag) { this.dragTo(raw); return; }
     if (this.box) { this.box.end = raw; this.updateDraft(); return; }
-    if (tool === 'select' || tool === 'constrain' || tool === 'dimension') {
+    if (tool === 'trim' || tool === 'fillet') {
+      let h = this.hitRef(raw);
+      // fillet wants corners; trim wants curves, not their end points
+      if (tool === 'fillet' && h && h.p === undefined) h = null;
+      if (tool === 'trim' && h?.p !== undefined) h = this.hitCurve(raw);
+      if (h?.e === ORIGIN) h = null;
+      this.setHover(tool === 'fillet' ? h : null);
+      this.trimHover = tool === 'trim' && h ? trimPreview(this.entities, h, raw) : null;
+      this.host.dom.style.cursor = h ? 'pointer' : 'crosshair';
+    } else if (tool === 'select' || tool === 'constrain' || tool === 'dimension') {
       const h = this.hitRef(raw, { inside: tool === 'select', axes: tool !== 'select' });
       this.setHover(h);
       this.host.dom.style.cursor = h ? (tool === 'select' ? 'move' : 'pointer') : tool === 'select' ? 'default' : 'crosshair';
@@ -723,6 +752,19 @@ export class SketchController {
       return;
     }
     if (tool === 'dimension') { if (raw) this.dimensionClick(raw); return; }
+    if (tool === 'trim' && raw) {
+      let h = this.hitRef(raw);
+      if (h?.p !== undefined) h = this.hitCurve(raw);
+      if (h && h.e !== ORIGIN) sketchTrim(h, raw);
+      this.trimHover = null;
+      return;
+    }
+    if (tool === 'fillet' && raw) {
+      const h = this.hitRef(raw);
+      if (h?.p !== undefined && h.e !== ORIGIN) sketchFillet(h);
+      else store.toast('Click a corner point to round it.');
+      return;
+    }
     // touch has no hover, so the cursor is wherever the finger lifted
     if (e.pointerType !== 'mouse' && raw) this.cursor = this.snap(raw);
     this.click(this.cursor, e.detail >= 2);
@@ -929,6 +971,7 @@ export class SketchController {
     this.typedDims = [];
     this.typed = '';
     this.dimPicks = [];
+    this.trimHover = null;
     this.box = null;
     this.clear(this.draftGroup);
     this.host.hud.style.display = 'none';
@@ -936,6 +979,18 @@ export class SketchController {
 
   /** Keyboard: typed dimensions, Enter to finish, Esc to cancel. */
   key(e: KeyboardEvent): boolean {
+    // fillet: type a radius
+    if (store.state.sketchTool === 'fillet') {
+      if (/^[0-9.]$/.test(e.key)) { this.typed += e.key; this.updateDraft(); return true; }
+      if (e.key === 'Backspace' && this.typed) { this.typed = this.typed.slice(0, -1); this.updateDraft(); return true; }
+      if (e.key === 'Enter' && this.typed) {
+        const r = parseFloat(this.typed);
+        this.typed = '';
+        if (r > 0) store.set({ sketchFilletR: r });
+        this.updateDraft();
+        return true;
+      }
+    }
     if (store.state.sketchTool === 'dimension' && this.dimPicks.length && e.key === 'Escape') {
       this.dimPicks = []; store.set({ sketchSelection: [] }); this.clear(this.draftGroup); this.host.invalidate(); return true;
     }
@@ -999,7 +1054,7 @@ export class SketchController {
 
     // cursor marker
     const ppu = this.pxPerUnit();
-    const drawing = tool !== 'select' && tool !== 'constrain' && tool !== 'dimension';
+    const drawing = tool !== 'select' && tool !== 'constrain' && tool !== 'dimension' && tool !== 'trim' && tool !== 'fillet';
     this.cursorDot.visible = drawing;
     this.cursorDot.matrixAutoUpdate = false;
     const s = (this.snapKind === 'point' || this.snapKind === 'mid' ? 5 : 3.5) / ppu;
@@ -1017,6 +1072,14 @@ export class SketchController {
     if (this.box) {
       const [a, b] = [this.box.start, this.box.end];
       add([a, [b[0], a[1]], b, [a[0], b[1]]], true, this.lineMat('#93c5fd', 1.2, 0.9, this.draftMaterials, true));
+    }
+    if (tool === 'trim' && this.trimHover && this.trimHover.length >= 2) {
+      add(this.trimHover, false, this.lineMat('#f87171', 4, 1, this.draftMaterials));
+      label = 'Trim'; hint = 'click to cut this piece away';
+    }
+    if (tool === 'fillet') {
+      label = this.typed ? `R ${this.typed}` : `R ${fmt(store.state.sketchFilletR)} mm`;
+      hint = this.typed ? 'Enter to use this radius' : 'click a corner · type a number to change';
     }
     if (tool === 'dimension' && this.dimPicks.length) {
       const plan = this.dimPlan(c);

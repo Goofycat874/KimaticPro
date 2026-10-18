@@ -5,7 +5,7 @@ import { COMMANDS, runCmd } from './commands';
 /** Keys that only apply in sketch mode override model-mode shortcuts with the same letter. */
 const SKETCH_KEYS: Record<string, string> = {
   v: 'sketch.select', l: 'sketch.line', r: 'sketch.rect', c: 'sketch.circle', p: 'sketch.polygon', a: 'sketch.arc',
-  d: 'sketch.dimension', x: 'sketch.construction',
+  d: 'sketch.dimension', x: 'sketch.construction', t: 'sketch.trim',
 };
 
 function combo(e: KeyboardEvent) {

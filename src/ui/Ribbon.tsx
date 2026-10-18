@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
-import { ChevronDown, Shapes, Check, ArrowUpFromLine, RotateCw, Trash2, AlignCenterHorizontal, Magnet } from 'lucide-preact';
+import { ChevronDown, Shapes, Check, ArrowUpFromLine, RotateCw, AlignCenterHorizontal, Magnet } from 'lucide-preact';
 import { store } from '../core/store';
 import { align, addShape } from '../core/actions';
 import { SHAPES, type ShapeCategory } from '../core/primitives';
@@ -28,11 +28,12 @@ const CONSTRAINT_TOOLS = ['coincident', 'horizontal', 'vertical', 'parallel', 'p
 
 /** Icon-only button for dense groups like constraints. */
 function MiniTool(props: { id: string }) {
-  useStore((s) => [s.sketchTool, s.sketchConstraint, s.sketchSelection]);
+  useStore((s) => [s.sketchTool, s.sketchConstraint, s.sketchSelection, s.showConstraints]);
   const c = cmd(props.id);
   const Icon = c.icon;
+  const enabled = !c.enabled || c.enabled();
   return (
-    <button class={`mini-tool ${c.active?.() ? 'active' : ''}`} onClick={c.run} data-tip-title={c.label} data-tip-desc={c.desc} aria-label={c.label}>
+    <button class={`mini-tool ${c.active?.() ? 'active' : ''}`} disabled={!enabled} onClick={c.run} data-tip-title={c.label} data-tip-desc={c.desc} aria-label={c.label}>
       <Icon size={16} />
     </button>
   );
@@ -174,14 +175,18 @@ function SketchRibbon() {
         </Group>
       )}
       <Group label="Edit">
-        <button class="tool" disabled={!s.sel} onClick={() => cmd('edit.delete').run()} data-tip-title="Delete" data-tip-desc="Delete the selected sketch shapes." data-tip-key="Delete">
-          <span class="tool-icon"><Trash2 size={21} /></span><span class="tool-label">Delete</span>
-        </button>
-        <Tool id="sketch.construction" />
-        <button class={`tool ${s.snap ? 'active' : ''}`} onClick={() => store.set({ snap: s.snap ? 0 : 1 })} data-tip-title="Snap to grid" data-tip-desc="Points jump to the grid so sizes come out neat.">
-          <span class="tool-icon"><Magnet size={21} /></span><span class="tool-label">Snap</span>
-        </button>
-        <Tool id="sketch.showConstraints" label="Hide marks" />
+        <Tool id="sketch.trim" />
+        <Tool id="sketch.fillet" label="Round" />
+        <div class="mini-grid cols-3">
+          <MiniTool id="sketch.offset" />
+          <MiniTool id="sketch.mirror" />
+          <MiniTool id="sketch.construction" />
+          <MiniTool id="edit.delete" />
+          <button class={`mini-tool ${s.snap ? 'active' : ''}`} onClick={() => store.set({ snap: s.snap ? 0 : 1 })} data-tip-title="Snap to grid" data-tip-desc="Points jump to the grid so sizes come out neat." aria-label="Snap to grid">
+            <Magnet size={16} />
+          </button>
+          <MiniTool id="sketch.showConstraints" />
+        </div>
       </Group>
       <Group label="Make 3D">
         <button class="tool good-tool" onClick={() => cmd('create.extrude').run()} data-tip-title="Extrude" data-tip-desc="Finish the sketch and pull it up into a solid.">

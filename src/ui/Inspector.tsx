@@ -700,6 +700,8 @@ const TOOL_HELP: Record<string, string> = {
   arc: 'Click where the arc starts, then where it ends, then move to bend it and click. Lines and arcs that meet end to end make closed shapes.',
   dimension: 'Click a line (length), circle (diameter), arc (radius), or two items (distance or angle). Click where the label goes, then type the size — numbers or parameters like width / 2.',
   constrain: 'Click the items to constrain. Press Esc when you’re done.',
+  trim: 'Click the piece of a line, circle or arc you want gone — it’s cut back to where other shapes cross it. Shortcut: T',
+  fillet: 'Click a corner where two lines meet to round it. Set the radius below, or just type it.',
 };
 
 const C_NAME: Record<string, string> = {
@@ -717,7 +719,7 @@ function DimensionField({ c }: { c: SketchConstraint }) {
 }
 
 function SketchInspector() {
-  const s = useStore((s) => ({ tool: s.sketchTool, sel: s.sketchSelection, sketchId: s.sketchId, doc: s.doc }));
+  const s = useStore((s) => ({ tool: s.sketchTool, sel: s.sketchSelection, sketchId: s.sketchId, doc: s.doc, filletR: s.sketchFilletR, offset: s.sketchOffset }));
   const sk = featureOf(s.doc, s.sketchId);
   if (sk?.type !== 'sketch') return null;
   const cs = sk.constraints ?? [];
@@ -730,6 +732,16 @@ function SketchInspector() {
   return <>
     <Head color="var(--good)" icon={PenLine} title={sk.name} sub={`Sketching on ${sk.plane.label}`} onRename={(v) => A.renameFeature(sk.id, v)} />
     <div class="insp-section"><div class="hint-box"><Lightbulb size={16} /><span>{TOOL_HELP[s.tool]}</span></div></div>
+    {s.tool === 'fillet' && <Section title="Round corner">
+      <Field label="Radius"><NumberField value={s.filletR} unit="mm" min={0.01} label="◠" onChange={(v) => store.set({ sketchFilletR: v })} /></Field>
+    </Section>}
+    {selected.length > 0 && <Section title="Copy shapes">
+      <Field label="Offset" tip="Positive goes outwards, negative inwards."><NumberField value={s.offset} unit="mm" label="⇲" onChange={(v) => store.set({ sketchOffset: v })} /></Field>
+      <div class="row-actions">
+        <button class="btn small" onClick={() => A.sketchOffset()}>Offset</button>
+        <button class="btn small" onClick={() => A.sketchMirror()} data-tip-title="Mirror" data-tip-desc="Across the selected line, or the vertical axis if no line is selected.">Mirror</button>
+      </div>
+    </Section>}
     {selCons.length > 0 && <Section title={selCons.length === 1 ? C_NAME[selCons[0].type] : `${selCons.length} constraints`}>
       {selCons.length === 1 && isDimension(selCons[0].type) && <Field label="Value" tip="Type a number or a formula using parameters, like width / 2.">
         <DimensionField c={selCons[0]} />

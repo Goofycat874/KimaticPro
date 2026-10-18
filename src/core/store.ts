@@ -13,7 +13,7 @@ export interface PickState {
   /** Editing an existing step instead of creating one. */
   featureId?: string;
 }
-export type SketchTool = 'select' | 'line' | 'rect' | 'crect' | 'circle' | 'polygon' | 'spline' | 'slot' | 'arc' | 'dimension' | 'constrain';
+export type SketchTool = 'select' | 'line' | 'rect' | 'crect' | 'circle' | 'polygon' | 'spline' | 'slot' | 'arc' | 'dimension' | 'constrain' | 'trim' | 'fillet';
 export type DisplayMode = 'shaded' | 'edges' | 'wire' | 'xray';
 export type GizmoMode = 'translate' | 'rotate' | 'scale';
 
@@ -32,6 +32,9 @@ export interface AppState {
   /** The constraint the Constrain tool is applying. */
   sketchConstraint: ConstraintType | null;
   showConstraints: boolean;
+  /** Corner radius for the sketch Fillet tool, and distance for Offset. */
+  sketchFilletR: number;
+  sketchOffset: number;
   polygonSides: number;
   gizmo: GizmoMode;
   theme: 'dark' | 'light';
@@ -103,6 +106,8 @@ export class Store {
       sketchSelection: [],
       sketchConstraint: null,
       showConstraints: true,
+      sketchFilletR: 2,
+      sketchOffset: 2,
       polygonSides: 6,
       gizmo: 'translate',
       theme: (prefs.theme as any) ?? 'dark',

@@ -6,6 +6,7 @@ import { defaultParams, shapeById } from './primitives';
 import { nextColor } from './materials';
 import { STANDARD_PLANES, entityOutline, entityPoints } from './sketch';
 import { defaultHole } from './holes';
+import { filletCorner, mirrorEntities, offsetEntities, trimAt } from './sketchEdit';
 import { ORIGIN, liveConstraints, measure, paramCount, refCircle, refLine, refPoint, solveSketch, withValues } from './constraints';
 import { evalExpr, usesNames } from './expr';
 import { arrangeOnBed, layFlatQuaternion } from './printing';
@@ -815,6 +816,57 @@ export function importSketchEntities(name: string, entities: SketchEntity[]) {
     viewApi.lookAtPlane?.(plane);
   }
   setTimeout(() => viewApi.fit?.(), 60);
+}
+
+/** Apply a sketch edit (entities + constraints) as one undo step. */
+function applySketchEdit(label: string, r: { entities: SketchEntity[]; constraints: SketchConstraint[] } | string) {
+  if (typeof r === 'string') { store.toast(r); return false; }
+  store.commit(label, sketchRecipe((s) => {
+    s.entities = r.entities;
+    s.constraints = r.constraints;
+    resolve(s);
+  }), { sketchSelection: [] });
+  return true;
+}
+
+export function sketchTrim(ref: SkRef, at: [number, number]) {
+  const s = activeSketch();
+  if (s) applySketchEdit('Trim', trimAt(s.entities, s.constraints ?? [], ref, at));
+}
+
+export function sketchFillet(ref: SkRef) {
+  const s = activeSketch();
+  if (s) applySketchEdit('Round corner', filletCorner(s.entities, s.constraints ?? [], ref, store.state.sketchFilletR));
+}
+
+const selectedWholes = () => [...new Set(store.state.sketchSelection.map(parseRefKey).filter((r): r is SkRef => !!r && r.e !== ORIGIN).map((r) => r.e))];
+
+export function sketchOffset(d = store.state.sketchOffset) {
+  const s = activeSketch();
+  const ids = selectedWholes();
+  if (!s || !ids.length) { store.toast('Select the shapes to offset first.'); return; }
+  const made = offsetEntities(s.entities, ids, d);
+  if (!made.length) { store.toast('That offset would shrink the shape to nothing.', 'error'); return; }
+  store.commit('Offset', sketchRecipe((sk) => { sk.entities.push(...made); }), { sketchSelection: made.map((e) => e.id) });
+}
+
+/** Mirror the selected shapes across the selected line (or the vertical axis if none is picked). */
+export function sketchMirror() {
+  const s = activeSketch();
+  if (!s) return;
+  const refs = store.state.sketchSelection.map(parseRefKey).filter((r): r is SkRef => !!r);
+  const ents = new Map(s.entities.map((e) => [e.id, e]));
+  // the mirror line: a picked segment, an axis, or a selected single straight line
+  let axis = refs.find((r) => r.s !== undefined);
+  if (!axis) {
+    const two = refs.find((r) => { const e = ents.get(r.e); return r.p === undefined && e?.kind === 'polyline' && e.points.length === 2 && !e.closed; });
+    if (two && refs.length > 1) axis = { e: two.e, s: 0 };
+  }
+  const line = axis ? refLine(ents, axis) : ([[0, 0], [0, 1]] as [[number, number], [number, number]]);
+  const ids = refs.filter((r) => r.p === undefined && r.s === undefined && r.e !== ORIGIN && r.e !== axis?.e).map((r) => r.e);
+  if (!line || !ids.length) { store.toast('Select shapes (and a line to mirror across — or none for the vertical axis).'); return; }
+  const made = mirrorEntities(s.entities, ids, line);
+  store.commit('Mirror', sketchRecipe((sk) => { sk.entities.push(...made); }), { sketchSelection: made.map((e) => e.id) });
 }
 
 /** Drill-hole tool: click faces to place holes. */

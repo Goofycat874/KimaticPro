@@ -7,7 +7,7 @@ import {
   Check, Upload, ScanEye, Crosshair, Diamond, SquareDashed, Pill, Ghost, Printer, BedDouble, PanelBottom, LayoutGrid,
   TriangleAlert, ClipboardCheck, Blend, SquareSplitVertical, Variable, SquareRoundCorner, PackageOpen, Triangle, FileBox,
   DraftingCompass, RulerDimensionLine, CircleDot, MoveHorizontal, MoveVertical, Pause, TriangleRight, Equal, Target,
-  GitCommitHorizontal, Lock, EyeOff, FileText, Drill,
+  GitCommitHorizontal, Lock, EyeOff, FileText, Drill, SquareSquare,
 } from 'lucide-preact';
 import type { ConstraintType } from '../core/types';
 import { store } from '../core/store';
@@ -133,6 +133,10 @@ export const COMMANDS: Command[] = [
   { id: 'sketch.spline', label: 'Spline', group: 'Sketch', icon: Spline, desc: 'Smooth curve through your clicks. Click the first point to close it.', run: () => A.setSketchTool('spline'), active: () => store.state.sketchTool === 'spline' },
   { id: 'sketch.arc', label: 'Arc', group: 'Sketch', icon: DraftingCompass, desc: 'Click the start, then the end, then move to bend it. Snaps onto line ends so shapes join up.', key: 'A', run: () => A.setSketchTool('arc'), active: () => store.state.sketchTool === 'arc', keywords: 'curve 3 point' },
   { id: 'sketch.dimension', label: 'Dimension', group: 'Sketch', icon: RulerDimensionLine, desc: 'Click a line, circle, or two items, then place the size and type the value you want. Sizes can use parameters like width / 2.', key: 'D', run: () => A.setSketchTool('dimension'), active: () => store.state.sketchTool === 'dimension', keywords: 'size measure driving constraint' },
+  { id: 'sketch.trim', label: 'Trim', group: 'Sketch', icon: Scissors, desc: 'Click the piece of a line, circle or arc to cut away — it stops where other shapes cross it. Great for turning overlapping shapes into one outline.', key: 'T', run: () => A.setSketchTool('trim'), active: () => store.state.sketchTool === 'trim', keywords: 'cut remove extend' },
+  { id: 'sketch.fillet', label: 'Round corner', group: 'Sketch', icon: SquareRoundCorner, desc: 'Click a corner where two lines meet to round it with an arc. Type a number to set the radius.', run: () => A.setSketchTool('fillet'), active: () => store.state.sketchTool === 'fillet', keywords: 'fillet radius arc corner' },
+  { id: 'sketch.offset', label: 'Offset', group: 'Sketch', icon: SquareSquare, desc: 'Copy the selected shapes a set distance outwards (walls, gaps, clearances). Set the distance on the right.', run: () => A.sketchOffset(), enabled: () => store.state.sketchSelection.length > 0, keywords: 'wall thickness inset outset parallel' },
+  { id: 'sketch.mirror', label: 'Mirror', group: 'Sketch', icon: FlipHorizontal2, desc: 'Mirror the selected shapes across a selected line, or across the vertical axis if no line is selected.', run: () => A.sketchMirror(), enabled: () => store.state.sketchSelection.length > 0, keywords: 'symmetric flip copy' },
   { id: 'sketch.construction', label: 'Construction', group: 'Sketch', icon: SquareDashed, desc: 'Turn selected shapes into dashed guide lines that never become solid.', key: 'X', run: () => A.toggleConstruction(), enabled: () => store.state.sketchSelection.length > 0, keywords: 'reference guide centerline' },
   { id: 'sketch.showConstraints', label: 'Show constraints', group: 'Sketch', icon: EyeOff, desc: 'Show or hide dimension labels and constraint markers.', run: () => store.set({ showConstraints: !store.state.showConstraints }), active: () => !store.state.showConstraints },
   ...([
