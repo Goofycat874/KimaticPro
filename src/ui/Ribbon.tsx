@@ -32,7 +32,7 @@ function Group(props: { label: string; children: ComponentChildren }) {
 }
 
 export function ShapeGallery(props: { onPick?: () => void; onDrag?: (dragging: boolean) => void }) {
-  const cats: ShapeCategory[] = ['Basic', 'Fun', 'Mechanical'];
+  const cats: ShapeCategory[] = ['Basic', 'Fun', 'Mechanical', 'Hardware'];
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   useEffect(() => {
     // render thumbnails lazily so the menu opens instantly
@@ -49,7 +49,7 @@ export function ShapeGallery(props: { onPick?: () => void; onDrag?: (dragging: b
     <div class="gallery">
       {cats.map((cat) => (
         <div key={cat}>
-          <div class="gallery-cat">{cat === 'Basic' ? 'Basic shapes' : cat === 'Fun' ? 'Fun shapes' : 'Mechanical'}</div>
+          <div class="gallery-cat">{cat === 'Basic' ? 'Basic shapes' : cat === 'Fun' ? 'Fun shapes' : cat === 'Hardware' ? 'Hardware & printing' : 'Mechanical'}</div>
           <div class="gallery-grid">
             {SHAPES.filter((s) => s.category === cat).map((s) => (
               <div key={s.id} class="shape-card" draggable

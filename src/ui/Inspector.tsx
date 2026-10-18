@@ -8,6 +8,7 @@ import { store } from '../core/store';
 import * as A from '../core/actions';
 import { bodyBounds, featureOf, type EvalBody } from '../core/evaluator';
 import { shapeById, SHAPES } from '../core/primitives';
+import { metricPitch } from '../core/hardware';
 import { MATERIALS, SWATCHES, materialById } from '../core/materials';
 import { computeArea, computeVolume, triangleCount } from '../core/geometry';
 import type { BodyOp, Feature, SketchEntity, TRS, Vec3 } from '../core/types';
@@ -65,13 +66,26 @@ function ShapeParams({ f }: { f: Extract<Feature, { type: 'primitive' }> }) {
             </Field>
           );
         }
+        if (p.type === 'select') {
+          return (
+            <Field key={p.key} label={p.label} tip={p.hint}>
+              <select class="select" value={String(v)} onChange={(e) => edit(f.id, `Change ${p.label.toLowerCase()}`, (x) => { x.params[p.key] = (e.currentTarget as HTMLSelectElement).value; })}>
+                {p.options!.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </Field>
+          );
+        }
         if (p.type === 'bool') {
           return <Field key={p.key} label={p.label}><Toggle value={!!v} onChange={(nv) => edit(f.id, p.label, (x) => { x.params[p.key] = nv; })} /></Field>;
         }
         return (
           <Field key={p.key} label={p.label} tip={p.hint}>
             <NumberField value={Number(v)} unit={p.unit} min={p.min} max={p.max} step={p.type === 'int' ? 1 : p.step ?? 1} integer={p.type === 'int'} label="↔"
-              onChange={(nv, live) => edit(f.id, `Change ${p.label.toLowerCase()}`, (x) => { x.params[p.key] = nv; }, live)}
+              onChange={(nv, live) => edit(f.id, `Change ${p.label.toLowerCase()}`, (x) => {
+                x.params[p.key] = nv;
+                // threads follow the metric coarse pitch for the chosen diameter
+                if (p.key === 'diameter' && def.params.some((q) => q.key === 'pitch')) x.params.pitch = metricPitch(nv);
+              }, live)}
               onCommit={commit(`Change ${p.label.toLowerCase()}`)} />
           </Field>
         );

@@ -18,7 +18,8 @@ describe('primitives', () => {
       const g = buildShape(s.id, {});
       g.computeBoundingBox();
       expect(g.getAttribute('position').count, s.id).toBeGreaterThan(0);
-      expect(g.boundingBox!.min.y, s.id).toBeCloseTo(0, 3);
+      if (!s.hangs) expect(g.boundingBox!.min.y, s.id).toBeCloseTo(0, 3);
+      expect(computeVolume(g), s.id).toBeGreaterThan(0);
     }
   });
   it('box volume is exact', () => {

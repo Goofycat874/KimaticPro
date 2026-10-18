@@ -4,11 +4,13 @@ import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
 import { Font } from 'three/examples/jsm/loaders/FontLoader.js';
 import fontJson from 'three/examples/fonts/helvetiker_bold.typeface.json';
 import { normalizeGeometry } from './geometry';
+import { bolt, container, nut, screwHole, threadedRod } from './hardware';
 
 export interface ParamDef {
   key: string;
   label: string;
-  type: 'number' | 'int' | 'text' | 'bool';
+  type: 'number' | 'int' | 'text' | 'bool' | 'select';
+  options?: { value: string; label: string }[];
   default: number | string | boolean;
   min?: number;
   max?: number;
@@ -17,7 +19,7 @@ export interface ParamDef {
   hint?: string;
 }
 
-export type ShapeCategory = 'Basic' | 'Fun' | 'Mechanical';
+export type ShapeCategory = 'Basic' | 'Fun' | 'Mechanical' | 'Hardware';
 
 export interface ShapeDef {
   id: string;
@@ -28,6 +30,10 @@ export interface ShapeDef {
   params: ParamDef[];
   /** Builds the shape resting on the ground (y = 0), centred on X/Z. */
   build: (p: Record<string, any>) => THREE.BufferGeometry;
+  /** Shapes like screw holes are meant to cut whatever they're dropped onto. */
+  defaultOp?: 'cut';
+  /** Holes hang below y = 0 so they sink into the face they're dropped on. */
+  hangs?: boolean;
 }
 
 const font = new Font(fontJson as any);
@@ -299,6 +305,52 @@ export const SHAPES: ShapeDef[] = [
       const curve = new HelixCurve(p.radius, p.height - p.wire * 2, p.turns);
       return groundAndCenter(new THREE.TubeGeometry(curve, Math.round(48 * p.turns), p.wire, 12, false));
     },
+  },
+  {
+    id: 'container', label: 'Storage box', category: 'Hardware', color: '#0ea5e9',
+    description: 'An open box with walls and a floor — organisers, trays, planters.',
+    params: [mm('width', 'Width', 60), mm('height', 'Height', 30), mm('depth', 'Depth', 40), mm('wall', 'Wall', 2, 0.4, 50), mm('floor', 'Floor', 2, 0.2, 50), mm('round', 'Round corners', 4, 0, 200)],
+    build: (p) => container(p as any),
+  },
+  {
+    id: 'screwhole', label: 'Screw hole', category: 'Hardware', color: '#ef4444', defaultOp: 'cut', hangs: true,
+    description: 'A clearance hole with counterbore or countersink. Drop it on a face to drill it.',
+    params: [
+      mm('diameter', 'Hole Ø', 3.4, 0.5, 100, 'M3 screws need ~3.4 mm'), mm('depth', 'Depth', 10),
+      { key: 'head', label: 'Head', type: 'select', default: 'counterbore', options: [{ value: 'none', label: 'Plain' }, { value: 'counterbore', label: 'Counterbore' }, { value: 'countersink', label: 'Countersink' }] },
+      mm('headDiameter', 'Head Ø', 6.5, 0.5, 200), mm('headDepth', 'Head depth', 3, 0, 200),
+    ],
+    build: (p) => {
+      const g = screwHole(p as any);
+      g.translate(0, -p.depth, 0);
+      return g;
+    },
+  },
+  {
+    id: 'thread', label: 'Threaded rod', category: 'Hardware', color: '#94a3b8',
+    description: 'A real printable screw thread (metric profile).',
+    params: [mm('diameter', 'Diameter', 8, 1, 200), { key: 'pitch', label: 'Pitch', type: 'number', default: 1.25, min: 0.2, max: 20, step: 0.05, unit: 'mm', hint: 'Distance between threads. M8 = 1.25' }, mm('length', 'Length', 30), { key: 'leftHand', label: 'Left-handed', type: 'bool', default: false }],
+    build: (p) => threadedRod({ diameter: p.diameter, pitch: p.pitch, length: p.length, leftHand: !!p.leftHand }),
+  },
+  {
+    id: 'bolt', label: 'Bolt', category: 'Hardware', color: '#64748b',
+    description: 'A printable bolt with hex or socket head. Prints head-down.',
+    params: [
+      mm('diameter', 'Diameter', 8, 1, 100), { key: 'pitch', label: 'Pitch', type: 'number', default: 1.25, min: 0.2, max: 20, step: 0.05, unit: 'mm' }, mm('length', 'Thread length', 20),
+      { key: 'head', label: 'Head', type: 'select', default: 'hex', options: [{ value: 'hex', label: 'Hex' }, { value: 'socket', label: 'Socket' }] },
+      mm('headHeight', 'Head height', 5.5), mm('headWidth', 'Head width', 13, 1, 200, 'Across the flats for hex heads'),
+    ],
+    build: (p) => bolt(p as any),
+  },
+  {
+    id: 'nut', label: 'Nut', category: 'Hardware', color: '#78716c',
+    description: 'A hex nut that fits the matching bolt. Tolerance adds print clearance.',
+    params: [
+      mm('diameter', 'Thread Ø', 8, 1, 100), { key: 'pitch', label: 'Pitch', type: 'number', default: 1.25, min: 0.2, max: 20, step: 0.05, unit: 'mm' },
+      mm('height', 'Height', 6.5), mm('width', 'Width', 13, 1, 200, 'Across the flats'),
+      { key: 'tolerance', label: 'Tolerance', type: 'number', default: 0.3, min: 0, max: 2, step: 0.05, unit: 'mm', hint: 'Extra room so a printed nut spins freely' },
+    ],
+    build: (p) => nut(p as any),
   },
 ];
 

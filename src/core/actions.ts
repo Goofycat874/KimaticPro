@@ -88,10 +88,15 @@ export function addShape(shapeId: string, opts: { position?: Vec3; op?: BodyOp; 
   const position: Vec3 = [round(pos[0], snap), round(pos[1], 0.001), round(pos[2], snap)];
   const params = defaultParams(def);
   if (shapeId === 'text') params.text = 'Hello';
+  // holes dropped onto a body drill straight into it
+  let op = opts.op ?? 'new';
+  let targets = opts.targets ?? [];
+  if (!opts.op && def.defaultOp && targets.length) op = def.defaultOp;
+  if (op === 'new') targets = [];
   store.commit(`Add ${def.label}`, (doc) => {
     insertFeature(doc, {
       id, type: 'primitive', name: nextName(doc, def.label), shape: shapeId, params,
-      transform: { ...identityTRS(), position }, op: opts.op ?? 'new', targets: opts.targets ?? [],
+      transform: { ...identityTRS(), position }, op, targets,
       appearance: { color: def.color ?? nextColor(), material: 'pla' },
     });
   }, { selection: [id], selectedFeature: id, mode: 'model' });

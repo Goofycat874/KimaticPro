@@ -620,7 +620,9 @@ export class Viewport {
       const shape = e.dataTransfer?.getData('text/kimatic-shape');
       if (!shape) return;
       e.preventDefault();
-      addShape(shape, { position: this.dropPoint(e) });
+      const hit = this.pickBody(e);
+      const onBody = hit?.object.userData.bodyId as string | undefined;
+      addShape(shape, { position: this.dropPoint(e), targets: onBody ? [onBody] : undefined });
     });
   }
 
