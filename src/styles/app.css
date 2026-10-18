@@ -591,7 +591,7 @@ code { font-family: var(--mono); font-size: 0.92em; background: var(--panel-2); 
   .tip { display: none; }
 }
 
-.app.mobile { height: 100dvh; grid-template-rows: 48px auto 1fr auto; }
+.app.mobile { height: 100%; grid-template-rows: 48px auto 1fr auto; }
 .app.mobile .mobile-only { display: revert !important; }
 .app.mobile .desktop-only, .app.mobile .hide-mobile, .app.mobile .statusbar, .app.mobile .brand-name, .app.mobile .doc-name + .spacer { display: none !important; }
 .app.mobile .topbar { gap: 4px; padding: 0 8px; }
