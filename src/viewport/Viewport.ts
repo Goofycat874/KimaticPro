@@ -4,13 +4,14 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { store, type AppState } from '../core/store';
 import {
-  addShape, createSketch, ensureEditable, select, selectFeature, setTransform, viewApi, bodyById,
+  addShape, createSketch, ensureEditable, layFlat, select, selectFeature, setTransform, viewApi, bodyById,
 } from '../core/actions';
 import { bodyBounds, featureOf, type EvalBody, type EvalGhost } from '../core/evaluator';
 import { materialById } from '../core/materials';
 import { planeFromFace, planeMatrix, STANDARD_PLANES } from '../core/sketch';
 import type { PlaneDef, TRS, Vec3 } from '../core/types';
 import { createGrid } from './grid';
+import { printerById } from '../core/printing';
 import { ViewCube } from './ViewCube';
 import { SketchController } from './SketchController';
 import { featureEdges } from './edges';
@@ -32,6 +33,25 @@ function edgesOf(g: THREE.BufferGeometry) {
   let e = edgeCache.get(g);
   if (!e) { e = featureEdges(g, 28); edgeCache.set(g, e); }
   return e;
+}
+
+/** Shared switch for the red "needs support" overhang tint on every body. */
+const overhangUniform = { value: 0 };
+
+function addOverhangShading(m: THREE.MeshStandardMaterial) {
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uOverhang = overhangUniform;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWorldN;\nvarying float vWorldY;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWorldN = normalize(mat3(modelMatrix) * objectNormal);\nvWorldY = (modelMatrix * vec4(transformed, 1.0)).y;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uOverhang;\nvarying vec3 vWorldN;\nvarying float vWorldY;')
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        if (uOverhang > 0.5 && vWorldY > 0.3 && normalize(vWorldN).y < -0.7072) {
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0, 0.12, 0.18), 0.8);
+        }`);
+  };
+  m.customProgramCacheKey = () => 'kimatic-overhang';
 }
 
 export class Viewport {
@@ -71,6 +91,11 @@ export class Viewport {
   private measureLabel: HTMLDivElement;
   private hud: HTMLDivElement;
   private size = { w: 1, h: 1 };
+  private bed = new THREE.Group();
+  private flatMarker = new THREE.Mesh(
+    new THREE.RingGeometry(0.55, 1, 40),
+    new THREE.MeshBasicMaterial({ color: ACCENT, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthTest: false }),
+  );
   private dark = true;
 
   constructor() {
@@ -161,6 +186,9 @@ export class Viewport {
     });
     this.scene.add(this.sketch.group);
     this.buildPlanePicker();
+    this.scene.add(this.bed, this.flatMarker);
+    this.flatMarker.visible = false;
+    this.syncBed();
 
     this.bindEvents();
     new ResizeObserver(() => this.resize()).observe(this.el);
@@ -251,6 +279,8 @@ export class Viewport {
     if (s.showGrid !== p.showGrid) { this.grid.mesh.visible = s.showGrid; this.invalidate(); }
     if (s.projection !== p.projection) this.setProjection(s.projection);
     if (s.measure !== p.measure) this.syncMeasure();
+    if (s.showBed !== p.showBed || s.printerId !== p.printerId || s.result !== p.result || s.theme !== p.theme) this.syncBed();
+    if (s.showOverhangs !== p.showOverhangs) { overhangUniform.value = s.showOverhangs ? 1 : 0; this.invalidate(); }
   }
 
   applyTheme() {
@@ -280,6 +310,7 @@ export class Viewport {
       const mp = materialById(b.appearance.material);
       if (!v) {
         const material = new THREE.MeshStandardMaterial({ polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+        addOverhangShading(material);
         const mesh = new THREE.Mesh(b.geometry, material);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
@@ -497,11 +528,54 @@ export class Viewport {
   private onModeChange(mode: AppState['mode'], prev: AppState['mode']) {
     this.setMouseMode(mode);
     this.planePicker.visible = mode === 'pick-plane';
-    this.canvas.style.cursor = mode === 'measure' || mode === 'pick-plane' ? 'crosshair' : mode === 'sketch' ? 'crosshair' : '';
+    this.canvas.style.cursor = mode === 'measure' || mode === 'pick-plane' || mode === 'lay-flat' ? 'crosshair' : mode === 'sketch' ? 'crosshair' : '';
+    if (mode !== 'lay-flat') this.flatMarker.visible = false;
     if (prev === 'sketch') this.sketch.cancel();
     if (prev === 'measure') store.set({ measure: { a: null, b: null } });
     if (mode === 'pick-plane') this.scalePlanePicker();
     this.syncGizmo();
+    this.invalidate();
+  }
+
+  /** The printer's build volume: a bed plate plus an outline that turns red when parts don't fit. */
+  private syncBed() {
+    const { showBed, printerId, result, theme } = store.state;
+    this.bed.traverse((o: any) => { o.geometry?.dispose(); o.material?.dispose(); });
+    this.bed.clear();
+    this.bed.visible = showBed;
+    if (!showBed) { this.invalidate(); return; }
+    const pr = printerById(printerId);
+    const ext = new THREE.Box3();
+    for (const b of result.bodies) if (b.visible) ext.union(bodyBounds(b));
+    const fits = ext.isEmpty() || (ext.min.x >= -pr.x / 2 - 0.01 && ext.max.x <= pr.x / 2 + 0.01 && ext.min.z >= -pr.z / 2 - 0.01 && ext.max.z <= pr.z / 2 + 0.01 && ext.max.y <= pr.y + 0.01);
+    const dark = theme === 'dark';
+    const plate = new THREE.Mesh(
+      new THREE.PlaneGeometry(pr.x, pr.z),
+      new THREE.MeshBasicMaterial({ color: fits ? (dark ? '#3b82f6' : '#2563eb') : '#ef4444', transparent: true, opacity: dark ? 0.1 : 0.08, depthWrite: false }),
+    );
+    plate.rotation.x = -Math.PI / 2;
+    plate.position.y = 0.02;
+    plate.renderOrder = -0.5;
+    const box = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(pr.x, pr.y, pr.z)),
+      new THREE.LineBasicMaterial({ color: fits ? (dark ? '#60a5fa' : '#2563eb') : '#ef4444', transparent: true, opacity: 0.55 }),
+    );
+    box.position.y = pr.y / 2;
+    plate.raycast = () => {};
+    box.raycast = () => {};
+    this.bed.add(plate, box);
+    this.invalidate();
+  }
+
+  private showFlatMarker(hit: THREE.Intersection | undefined) {
+    const m = this.flatMarker;
+    if (!hit?.face || !hit.object.userData.bodyId) { if (m.visible) { m.visible = false; this.invalidate(); } return; }
+    const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+    m.position.copy(hit.point).addScaledVector(n, 0.05);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
+    m.scale.setScalar(Math.max(2, this.camera.position.distanceTo(hit.point) * 0.03));
+    m.renderOrder = 30;
+    m.visible = true;
     this.invalidate();
   }
 
@@ -578,6 +652,7 @@ export class Viewport {
       if (e.buttons) return;
       if (mode === 'pick-plane') { this.hoverPlanes(e); return; }
       const hit = this.pickBody(e);
+      if (mode === 'lay-flat') this.showFlatMarker(hit);
       const id = (hit?.object.userData.bodyId as string) ?? null;
       if (id !== this.hoverId) {
         this.hoverId = id;
@@ -649,6 +724,12 @@ export class Viewport {
       } else if (planeHit) {
         createSketch(STANDARD_PLANES[planeHit.object.userData.plane as keyof typeof STANDARD_PLANES]);
       }
+      return;
+    }
+    if (mode === 'lay-flat') {
+      const hit = this.pickBody(e);
+      const id = hit?.object.userData.bodyId as string | undefined;
+      if (hit?.face && id) layFlat(id, hit.face.normal.clone().transformDirection(hit.object.matrixWorld));
       return;
     }
     if (mode === 'measure') {

@@ -9,6 +9,7 @@ import { store, emptyDoc } from './store';
 import { importMesh, viewApi } from './actions';
 import { encodePositions } from './geometry';
 import { materialById } from './materials';
+import { build3MF } from './printing';
 import type { DesignDoc } from './types';
 
 function download(blob: Blob, filename: string) {
@@ -44,7 +45,7 @@ function exportScene(onlySelection: boolean) {
   return scene;
 }
 
-export type ExportFormat = 'stl' | 'obj' | 'glb' | 'png' | 'kimatic';
+export type ExportFormat = 'stl' | '3mf' | 'obj' | 'glb' | 'png' | 'kimatic';
 
 export async function exportAs(format: ExportFormat, onlySelection = false) {
   const name = safeName();
@@ -54,6 +55,15 @@ export async function exportAs(format: ExportFormat, onlySelection = false) {
     if (!url) return;
     const blob = await (await fetch(url)).blob();
     download(blob, `${name}.png`);
+    return;
+  }
+  if (format === '3mf') {
+    const ids = new Set(store.state.selection);
+    const bodies = store.state.result.bodies.filter((b) => b.visible && (!onlySelection || !ids.size || ids.has(b.id)));
+    if (!bodies.length) { store.toast('Nothing to export yet — add a shape first!', 'error'); return; }
+    const data = build3MF(bodies.map((b) => ({ name: b.name, geometry: b.geometry, matrix: b.matrix, color: b.appearance.color })));
+    download(new Blob([data as BlobPart], { type: 'model/3mf' }), `${name}.3mf`);
+    store.toast(`Exported ${name}.3mf`, 'success');
     return;
   }
   const scene = exportScene(onlySelection);

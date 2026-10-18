@@ -50,7 +50,7 @@ export function TopBar() {
         <div class="brand-name">Kimatic<span>Pro</span></div>
       </div>
       <MenuButton label={<><Menu size={16} /> File <ChevronDown size={13} /></>}
-        items={['file.new', 'file.open', 'file.save', '-', 'file.import', '-', 'export.stl', 'export.obj', 'export.glb', 'export.png']} />
+        items={['file.new', 'file.open', 'file.save', '-', 'file.import', '-', 'print.check', 'export.3mf', 'export.stl', 'export.obj', 'export.glb', 'export.png']} />
       <MenuButton label={<>Edit <ChevronDown size={13} /></>}
         items={['edit.undo', 'edit.redo', '-', 'edit.copy', 'edit.paste', 'edit.duplicate', 'edit.delete', '-', 'edit.selectAll']} />
       <MenuButton label={<>View <ChevronDown size={13} /></>}
@@ -83,8 +83,8 @@ export function TopBar() {
       <button class="icon-btn" onClick={() => togglePanel('right')} data-tip-title="Toggle properties panel"><PanelRight size={17} /></button>
       <button class="icon-btn" onClick={() => runCmd('view.theme')} data-tip-title="Dark / light theme">{s.theme === 'dark' ? <Moon size={17} /> : <Sun size={17} />}</button>
       <button class="icon-btn" onClick={() => store.set({ dialog: 'about' })} data-tip-title="About KimaticPro"><CircleQuestionMark size={17} /></button>
-      <button class="btn primary small" onClick={() => runCmd('export.stl')} data-tip-title="Export for 3D printing" data-tip-desc="Download an STL of every visible body." data-tip-key="Ctrl+E">
-        <Download size={14} /> Export
+      <button class="btn primary small" onClick={() => runCmd('print.check')} data-tip-title="Print it" data-tip-desc="Check your design is printable, then export a 3MF or STL for your slicer." data-tip-key="P">
+        <Download size={14} /> Print / Export
       </button>
       <button class="btn small" onClick={() => runCmd('file.save')} data-tip-title="Save design" data-tip-key="Ctrl+S"><Save size={14} /> Save</button>
     </header>

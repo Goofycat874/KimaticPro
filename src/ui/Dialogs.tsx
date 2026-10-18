@@ -1,11 +1,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { FilePlus2, FolderOpen, GraduationCap, X, Search, RotateCcw, CircleCheck, CircleAlert, Info, ArrowRight, Sparkles } from 'lucide-preact';
+import * as THREE from 'three';
+import { FilePlus2, FolderOpen, GraduationCap, X, Search, RotateCcw, CircleCheck, CircleAlert, Info, ArrowRight, Sparkles, Printer, Download } from 'lucide-preact';
+import { analyzePrint, PRINTERS, printerById } from '../core/printing';
 import { store, emptyDoc, Store } from '../core/store';
 import { TEMPLATES } from '../core/templates';
 import { pickFile } from '../core/io';
 import { viewApi } from '../core/actions';
 import { docThumbnail } from '../viewport/thumbnails';
-import { COMMANDS } from './commands';
+import { COMMANDS, runCmd } from './commands';
 import { Kbd } from './controls';
 import { useStore } from './hooks';
 
@@ -253,6 +255,70 @@ export function Toasts() {
           {t.text}
         </div>
       ))}
+    </div>
+  );
+}
+
+export function PrintDialog() {
+  const s = useStore((s) => ({ open: s.dialog === 'print', printerId: s.printerId, print: s.print, result: s.result }));
+  const report = useMemo(
+    () => (s.open ? analyzePrint(s.result.bodies, printerById(s.printerId), s.print) : null),
+    [s.open, s.result, s.printerId, s.print],
+  );
+  if (!s.open || !report) return null;
+  const close = () => store.set({ dialog: null });
+  const size = report.extent.isEmpty() ? null : report.extent.getSize(new THREE.Vector3());
+  const setPrint = (p: Partial<typeof s.print>) => store.set({ print: { ...s.print, ...p } });
+  const icon = (l: string) => (l === 'ok' ? <CircleCheck size={16} style={{ color: 'var(--good)' }} /> : l === 'warn' ? <CircleAlert size={16} style={{ color: 'var(--warn)' }} /> : <CircleAlert size={16} style={{ color: 'var(--bad)' }} />);
+  const h = Math.floor(report.hours), m = Math.round((report.hours - h) * 60);
+  return (
+    <div class="modal-back" onClick={(e) => e.target === e.currentTarget && close()}>
+      <div class="modal print-dialog">
+        <div class="modal-head"><Printer size={20} style={{ color: 'var(--accent)' }} /><h2>Ready to print?</h2><button class="icon-btn" onClick={close}><X size={18} /></button></div>
+        <div class="modal-body">
+          <div class="print-grid">
+            <div>
+              <div class="insp-title">Printer & settings</div>
+              <div class="field"><label>Printer</label>
+                <select class="select" value={s.printerId} onChange={(e) => store.set({ printerId: (e.currentTarget as HTMLSelectElement).value, showBed: true })}>
+                  {PRINTERS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+              <div class="field"><label>Infill</label>
+                <div class="slider-row"><input type="range" min={0} max={100} step={5} value={Math.round(s.print.infill * 100)} onInput={(e) => setPrint({ infill: Number((e.currentTarget as HTMLInputElement).value) / 100 })} /><span style={{ width: 38, textAlign: 'right' }}>{Math.round(s.print.infill * 100)}%</span></div>
+              </div>
+              <div class="field"><label>Layer height</label>
+                <select class="select" value={String(s.print.layer)} onChange={(e) => setPrint({ layer: Number((e.currentTarget as HTMLSelectElement).value) })}>
+                  {[0.08, 0.12, 0.16, 0.2, 0.24, 0.28].map((v) => <option key={v} value={v}>{v} mm{v === 0.2 ? ' (standard)' : v < 0.15 ? ' (fine)' : v > 0.22 ? ' (draft)' : ''}</option>)}
+                </select>
+              </div>
+              <div class="stats" style={{ marginTop: 12 }}>
+                <div class="stat" style={{ gridColumn: '1 / -1' }}><div class="k">Overall size</div><div class="v">{size ? `${size.x.toFixed(1)} × ${size.z.toFixed(1)} × ${size.y.toFixed(1)} mm` : '—'}</div></div>
+                <div class="stat"><div class="k">Filament</div><div class="v">{report.grams.toFixed(1)} g · {report.meters.toFixed(2)} m</div></div>
+                <div class="stat"><div class="k">Print time ≈</div><div class="v">{h ? `${h} h ` : ''}{m} min</div></div>
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--text-3)', margin: '8px 0 0', lineHeight: 1.5 }}>Rough estimates for 1.75 mm filament with {s.print.walls} mm walls. Your slicer will give exact numbers.</p>
+            </div>
+            <div>
+              <div class="insp-title">Checks</div>
+              <div class="checks">
+                {report.issues.map((i, k) => <div key={k} class={`check ${i.level}`}>{icon(i.level)}<span>{i.text}</span></div>)}
+              </div>
+              <div class="row-actions" style={{ marginTop: 12 }}>
+                <button class="btn small" onClick={() => { runCmd('print.drop'); }}>Drop to bed</button>
+                <button class="btn small" onClick={() => { runCmd('print.arrange'); }}>Arrange on bed</button>
+                <button class="btn small" onClick={() => { close(); store.set({ mode: 'lay-flat' }); }}>Lay flat…</button>
+                <button class={`btn small ${store.state.showOverhangs ? 'primary' : ''}`} onClick={() => runCmd('print.overhangs')}>Show overhangs</button>
+              </div>
+            </div>
+          </div>
+          <div class="print-foot">
+            <span style={{ flex: 1, color: 'var(--text-3)', fontSize: 12 }}>3MF keeps exact millimetres, separate parts and colours. STL works everywhere.</span>
+            <button class="btn" onClick={() => runCmd('export.stl')}><Download size={14} /> STL</button>
+            <button class="btn primary" onClick={() => runCmd('export.3mf')}><Download size={14} /> Export 3MF</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

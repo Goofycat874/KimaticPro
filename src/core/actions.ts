@@ -5,6 +5,7 @@ import { bodyBounds, featureOf, trsMatrix, type EvalBody } from './evaluator';
 import { defaultParams, shapeById } from './primitives';
 import { nextColor } from './materials';
 import { STANDARD_PLANES } from './sketch';
+import { arrangeOnBed, layFlatQuaternion } from './printing';
 import {
   identityTRS, isCreating, uid,
   type Appearance, type BodyOp, type DesignDoc, type ExtrudeFeature, type Feature, type MoveFeature,
@@ -261,34 +262,34 @@ export function ensureEditable(ids: string[], live = true): string | null {
 }
 
 /** Nudge bodies by a world-space offset (arrow keys, drop to ground, align). */
-export function moveBodiesBy(ids: string[], delta: THREE.Vector3, label = 'Move') {
-  if (!ids.length || delta.lengthSq() < 1e-12) return;
-  const direct: { fid: string; local: THREE.Vector3 }[] = [];
-  const rest: string[] = [];
-  for (const id of ids) {
-    const b = bodyById(id);
-    if (!b) continue;
-    if (b.editableFeatureId && (ids.length === 1 || featureOf(store.doc, b.editableFeatureId)?.type !== 'move')) {
-      const frame = store.state.result.frames[b.editableFeatureId] ?? new THREE.Matrix4();
-      const inv = new THREE.Matrix4().extractRotation(frame).invert();
-      direct.push({ fid: b.editableFeatureId, local: delta.clone().applyMatrix4(inv) });
-    } else rest.push(id);
-  }
+/** Move several bodies by their own world offsets in a single undo step. */
+export function moveEach(moves: [string, THREE.Vector3][], label = 'Move', extra: Partial<typeof store.state> = {}) {
+  const live = moves.filter(([id, d]) => bodyById(id) && d.lengthSq() > 1e-12);
+  if (!live.length) return;
   store.commit(label, (doc) => {
-    for (const { fid, local } of direct) {
-      const f = doc.features.find((x) => x.id === fid) as any;
-      if (!f?.transform) continue;
-      const p = f.transform.position;
-      f.transform.position = [round(p[0] + local.x), round(p[1] + local.y), round(p[2] + local.z)];
+    for (const [id, delta] of live) {
+      const b = bodyById(id)!;
+      const f = b.editableFeatureId ? doc.features.find((x) => x.id === b.editableFeatureId) as any : null;
+      // edit the feature that places the body directly, unless it's a move shared with other bodies
+      if (f?.transform && (f.type !== 'move' || f.bodyIds.length === 1)) {
+        const frame = store.state.result.frames[f.id] ?? new THREE.Matrix4();
+        const local = delta.clone().applyMatrix4(new THREE.Matrix4().extractRotation(frame).invert());
+        const p = f.transform.position;
+        f.transform.position = [round(p[0] + local.x), round(p[1] + local.y), round(p[2] + local.z)];
+      } else {
+        const c = bodyBounds(b).getCenter(new THREE.Vector3());
+        insertFeature(doc, {
+          id: uid('m'), type: 'move', name: nextName(doc, 'Move'), bodyIds: [id], pivot: [round(c.x), round(c.y), round(c.z)],
+          transform: { ...identityTRS(), position: [round(delta.x), round(delta.y), round(delta.z)] }, copy: false,
+        });
+      }
     }
-    if (rest.length) {
-      const c = selectionBounds(rest).getCenter(new THREE.Vector3());
-      insertFeature(doc, {
-        id: uid('m'), type: 'move', name: nextName(doc, 'Move'), bodyIds: rest, pivot: [round(c.x), round(c.y), round(c.z)],
-        transform: { ...identityTRS(), position: [round(delta.x), round(delta.y), round(delta.z)] }, copy: false,
-      });
-    }
-  });
+  }, extra);
+}
+
+/** Nudge bodies together by one world-space offset (arrow keys, drop to ground, centre). */
+export function moveBodiesBy(ids: string[], delta: THREE.Vector3, label = 'Move') {
+  moveEach(ids.map((id) => [id, delta.clone()]), label);
 }
 
 export function nudge(dx: number, dy: number, dz: number) {
@@ -314,17 +315,66 @@ export function align(axis: 'x' | 'y' | 'z', mode: 'min' | 'center' | 'max') {
   if (ids.length < 2) { store.toast('Select two or more bodies to align them.'); return; }
   const all = selectionBounds(ids);
   const target = mode === 'min' ? all.min[axis] : mode === 'max' ? all.max[axis] : (all.min[axis] + all.max[axis]) / 2;
-  const recipeMoves: [string, THREE.Vector3][] = [];
+  const moves: [string, THREE.Vector3][] = [];
   for (const id of ids) {
     const b = bodyById(id)!;
     const bb = bodyBounds(b);
     const v = mode === 'min' ? bb.min[axis] : mode === 'max' ? bb.max[axis] : (bb.min[axis] + bb.max[axis]) / 2;
     const d = new THREE.Vector3();
     d[axis] = target - v;
-    recipeMoves.push([id, d]);
+    moves.push([id, d]);
   }
-  // one undo step per alignment
-  for (const [id, d] of recipeMoves) moveBodiesBy([id], d, `Align ${axis.toUpperCase()}`);
+  moveEach(moves, `Align ${axis.toUpperCase()}`);
+}
+
+// ---------------------------------------------------------------------------
+// 3D printing helpers
+
+const visibleBodies = () => store.state.result.bodies.filter((b) => b.visible);
+
+/** Sit every body (or the selection) on the bed individually. */
+export function dropAllToBed() {
+  const ids = store.state.selection.length ? store.state.selection : visibleBodies().map((b) => b.id);
+  moveEach(ids.map((id) => [id, new THREE.Vector3(0, -bodyBounds(bodyById(id)!).min.y, 0)]), 'Drop to bed');
+}
+
+/** Pack all visible bodies onto the printer bed without overlaps. */
+export function arrangeAll(bedWidth: number) {
+  const bodies = visibleBodies();
+  if (!bodies.length) return;
+  const offsets = arrangeOnBed(bodies.map((b) => ({ id: b.id, box: bodyBounds(b) })), bedWidth);
+  moveEach([...offsets.entries()], 'Arrange on bed');
+  setTimeout(() => viewApi.fit?.(), 30);
+}
+
+/** Rotate a body so the clicked face lies on the bed, then drop it. */
+export function layFlat(bodyId: string, worldNormal: THREE.Vector3) {
+  const b = bodyById(bodyId);
+  if (!b) return;
+  const q = layFlatQuaternion(worldNormal);
+  if (Math.abs(q.w) > 0.99999) { dropToGround([bodyId]); return; }
+  const c = bodyBounds(b).getCenter(new THREE.Vector3());
+  // lowest point after rotating about the centre
+  const rot = new THREE.Matrix4().makeTranslation(c.x, c.y, c.z)
+    .multiply(new THREE.Matrix4().makeRotationFromQuaternion(q))
+    .multiply(new THREE.Matrix4().makeTranslation(-c.x, -c.y, -c.z))
+    .multiply(b.matrix);
+  const box = b.geometry.boundingBox ?? (b.geometry.computeBoundingBox(), b.geometry.boundingBox!);
+  const pos = b.geometry.getAttribute('position');
+  let minY = Infinity;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) minY = Math.min(minY, v.fromBufferAttribute(pos, i).applyMatrix4(rot).y);
+  if (!Number.isFinite(minY)) minY = box.min.y;
+  const e = new THREE.Euler().setFromQuaternion(q);
+  const deg = (r: number) => Math.round((r * 180) / Math.PI * 1000) / 1000;
+  const id = uid('m');
+  store.commit('Lay flat', (doc) => {
+    insertFeature(doc, {
+      id, type: 'move', name: nextName(doc, 'Lay flat'), bodyIds: [bodyId], pivot: [round(c.x), round(c.y), round(c.z)],
+      transform: { position: [0, round(-minY), 0], rotation: [deg(e.x), deg(e.y), deg(e.z)], scale: [1, 1, 1] }, copy: false,
+    });
+  }, { mode: 'model', selection: [bodyId] });
+  store.toast('Laid flat — that face is now on the bed', 'success');
 }
 
 let clipboard: string[] = [];

@@ -7,7 +7,7 @@ import { Inspector } from './Inspector';
 import { Timeline } from './Timeline';
 import { StatusBar } from './StatusBar';
 import { ViewportOverlay } from './ViewportOverlay';
-import { About, CommandPalette, Shortcuts, Toasts, Tour, Welcome } from './Dialogs';
+import { About, CommandPalette, PrintDialog, Shortcuts, Toasts, Tour, Welcome } from './Dialogs';
 import { TooltipLayer } from './controls';
 import type { Viewport } from '../viewport/Viewport';
 
@@ -36,6 +36,7 @@ export function App({ viewport }: { viewport: Viewport }) {
       <CommandPalette />
       <Shortcuts />
       <About />
+      <PrintDialog />
       <Tour />
       <Toasts />
       <TooltipLayer />

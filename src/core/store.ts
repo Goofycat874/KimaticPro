@@ -1,7 +1,7 @@
 import { evaluate, type EvalResult } from './evaluator';
 import type { DesignDoc } from './types';
 
-export type Mode = 'model' | 'pick-plane' | 'sketch' | 'measure';
+export type Mode = 'model' | 'pick-plane' | 'sketch' | 'measure' | 'lay-flat';
 export type SketchTool = 'select' | 'line' | 'rect' | 'crect' | 'circle' | 'polygon' | 'spline' | 'slot';
 export type DisplayMode = 'shaded' | 'edges' | 'wire' | 'xray';
 export type GizmoMode = 'translate' | 'rotate' | 'scale';
@@ -30,7 +30,11 @@ export interface AppState {
   section: { enabled: boolean; axis: 'x' | 'y' | 'z'; offset: number; flip: boolean };
   welcome: boolean;
   palette: boolean;
-  dialog: null | 'shortcuts' | 'about' | 'export' | 'tour';
+  dialog: null | 'shortcuts' | 'about' | 'export' | 'tour' | 'print' | 'params';
+  printerId: string;
+  showBed: boolean;
+  showOverhangs: boolean;
+  print: { infill: number; walls: number; layer: number };
   tourStep: number;
   toasts: Toast[];
   measure: { a: [number, number, number] | null; b: [number, number, number] | null };
@@ -93,6 +97,10 @@ export class Store {
       welcome: true,
       palette: false,
       dialog: null,
+      printerId: (prefs as any).printerId ?? 'bambu-x1',
+      showBed: (prefs as any).showBed ?? false,
+      showOverhangs: false,
+      print: (prefs as any).print ?? { infill: 0.15, walls: 1.2, layer: 0.2 },
       tourStep: 0,
       toasts: [],
       measure: { a: null, b: null },
@@ -113,9 +121,10 @@ export class Store {
   set(patch: Partial<AppState>) {
     const prev = this.state;
     this.state = { ...prev, ...patch };
-    if ('theme' in patch || 'beginner' in patch || 'displayMode' in patch || 'snap' in patch || 'showGrid' in patch) {
-      const { theme, beginner, displayMode, snap, showGrid } = this.state;
-      try { localStorage.setItem(PREFS_KEY, JSON.stringify({ theme, beginner, displayMode, snap, showGrid })); } catch { /* ignore */ }
+    const PREF_KEYS = ['theme', 'beginner', 'displayMode', 'snap', 'showGrid', 'printerId', 'showBed', 'print'] as const;
+    if (PREF_KEYS.some((k) => k in patch)) {
+      const prefs = Object.fromEntries(PREF_KEYS.map((k) => [k, this.state[k]]));
+      try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch { /* ignore */ }
     }
     for (const l of this.listeners) l(this.state, prev);
   }

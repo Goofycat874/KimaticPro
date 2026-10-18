@@ -4,6 +4,7 @@ import { useStore } from './hooks';
 
 function hintFor(s: ReturnType<typeof pick>): string {
   if (s.mode === 'pick-plane') return 'Click a coloured plane or any flat face of a body to start sketching on it. Esc to cancel.';
+  if (s.mode === 'lay-flat') return 'Click a face — the body turns so that face rests on the bed. Esc when done.';
   if (s.mode === 'measure') return 'Click two points to measure. Corners snap. Esc to stop measuring.';
   if (s.mode === 'sketch') {
     const map: Record<string, string> = {

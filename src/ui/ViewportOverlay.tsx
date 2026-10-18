@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import {
   House, Focus, Diamond, Grid3x3, Scissors, Eye, Move, Rotate3d, Scale3d, X, Check, PenLine, Ruler, Box as BoxIcon,
-  Copy, Trash2, ArrowDownToLine, EyeOff, Ghost, SquaresUnite, ScanEye, Palette, ArrowUpFromLine, Shapes,
+  Copy, Trash2, ArrowDownToLine, EyeOff, Ghost, SquaresUnite, ScanEye, Palette, ArrowUpFromLine, Shapes, PanelBottom,
 } from 'lucide-preact';
 import { store } from '../core/store';
 import * as A from '../core/actions';
@@ -90,6 +90,15 @@ function Banner() {
         <div><div class="b-title">{sk?.name}</div><div class="b-sub">{n ? `${n} shape${n > 1 ? 's' : ''} · draw closed shapes to make solids` : 'Pick a tool and start drawing'}</div></div>
         {n > 0 && <button class="btn small primary" onClick={() => A.extrude()}><ArrowUpFromLine size={14} /> Extrude</button>}
         <button class="btn small good" onClick={() => A.finishSketch()}><Check size={14} /> Finish</button>
+      </div>
+    );
+  }
+  if (s.mode === 'lay-flat') {
+    return (
+      <div class="banner">
+        <PanelBottom size={17} style={{ color: 'var(--accent)' }} />
+        <div><div class="b-title">Lay flat</div><div class="b-sub">Click the face that should sit on the print bed</div></div>
+        <button class="btn small" onClick={() => store.set({ mode: 'model' })}>Done</button>
       </div>
     );
   }

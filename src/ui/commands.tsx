@@ -4,11 +4,13 @@ import {
   SquaresUnite, SquaresSubtract, SquaresIntersect, Repeat, Orbit, FlipHorizontal2, Copy, Trash2, ArrowDownToLine,
   Ruler, Scissors, Eye, Download, Save, FolderOpen, Image, FilePlus2, Undo2, Redo2, Focus, House, Search,
   Keyboard, Sun, Moon, GraduationCap, Grid3x3, Layers2, Spline, RectangleHorizontal, Circle, Hexagon, MousePointer2,
-  Check, Upload, ScanEye, Crosshair, Diamond, SquareDashed, Pill, Ghost,
+  Check, Upload, ScanEye, Crosshair, Diamond, SquareDashed, Pill, Ghost, Printer, BedDouble, PanelBottom, LayoutGrid,
+  TriangleAlert, ClipboardCheck,
 } from 'lucide-preact';
 import { store } from '../core/store';
 import * as A from '../core/actions';
 import { exportAs, pickFile, saveProject } from '../core/io';
+import { printerById } from '../core/printing';
 
 export interface Command {
   id: string;
@@ -35,6 +37,7 @@ export const COMMANDS: Command[] = [
   { id: 'file.save', label: 'Save', group: 'File', icon: Save, desc: 'Download your design as a .kimatic file you can reopen and keep editing.', key: 'Ctrl+S', run: saveProject },
   { id: 'file.import', label: 'Import mesh', group: 'File', icon: Upload, desc: 'Bring in an STL or OBJ model from another app.', run: () => pickFile('.stl,.obj') },
   { id: 'export.stl', label: 'Export STL (3D print)', group: 'Export', icon: Download, desc: 'The standard file for 3D printers and slicers.', key: 'Ctrl+E', run: () => exportAs('stl'), keywords: 'print slicer cura prusa' },
+  { id: 'export.3mf', label: 'Export 3MF (3D print)', group: 'Export', icon: Download, desc: 'The modern slicer format: exact millimetres, separate parts and colours. Best for Bambu, Prusa and Cura.', run: () => exportAs('3mf'), keywords: 'print slicer bambu orca prusa' },
   { id: 'export.obj', label: 'Export OBJ', group: 'Export', icon: Download, desc: 'Widely supported mesh format.', run: () => exportAs('obj') },
   { id: 'export.glb', label: 'Export GLB', group: 'Export', icon: Download, desc: 'glTF binary with colours — for games, AR and the web.', run: () => exportAs('glb'), keywords: 'gltf blender unity' },
   { id: 'export.png', label: 'Save image', group: 'Export', icon: Image, desc: 'Save a picture of the current view.', run: () => exportAs('png'), keywords: 'screenshot render picture' },
@@ -73,6 +76,15 @@ export const COMMANDS: Command[] = [
   { id: 'modify.mirror', label: 'Mirror', group: 'Modify', icon: FlipHorizontal2, desc: 'Make a mirror-image copy across a plane.', key: 'M', run: () => A.addMirror(), enabled: hasSel, keywords: 'flip symmetry' },
   { id: 'arrange.drop', label: 'Drop to ground', group: 'Arrange', icon: ArrowDownToLine, desc: 'Sit the selection flat on the ground.', key: 'D', run: () => A.dropToGround(), enabled: hasSel, keywords: 'floor' },
   { id: 'arrange.center', label: 'Center', group: 'Arrange', icon: Crosshair, desc: 'Move the selection to the middle of the grid.', run: () => A.centerOnOrigin(), enabled: hasSel, keywords: 'origin' },
+
+  // 3D printing
+  { id: 'print.check', label: 'Print check', group: 'Print', icon: ClipboardCheck, desc: 'Is it ready to print? Checks bed size, floating parts, gaps and overhangs, and estimates filament and time.', key: 'P', run: () => store.set({ dialog: 'print' }), keywords: 'printable slicer filament estimate' },
+  { id: 'print.bed', label: 'Show bed', group: 'Print', icon: BedDouble, desc: "Show your printer's build volume. It turns red if your design doesn't fit.", run: () => store.set({ showBed: !store.state.showBed }), active: () => store.state.showBed, keywords: 'build volume plate' },
+  { id: 'print.overhangs', label: 'Overhangs', group: 'Print', icon: TriangleAlert, desc: 'Paint faces red that hang over more than 45° — they need supports, or a better orientation.', key: 'O', run: () => store.set({ showOverhangs: !store.state.showOverhangs }), active: () => store.state.showOverhangs, keywords: 'support angle' },
+  { id: 'print.layflat', label: 'Lay flat', group: 'Print', icon: PanelBottom, desc: 'Click any face and the body rotates so that face sits on the bed.', key: 'L', run: () => store.set({ mode: store.state.mode === 'lay-flat' ? 'model' : 'lay-flat' }), active: () => store.state.mode === 'lay-flat', enabled: () => store.state.mode !== 'sketch', keywords: 'orient rotate face bed' },
+  { id: 'print.drop', label: 'Drop to bed', group: 'Print', icon: ArrowDownToLine, desc: 'Put every part (or the selection) flat on the bed.', run: () => A.dropAllToBed() },
+  { id: 'print.arrange', label: 'Arrange on bed', group: 'Print', icon: LayoutGrid, desc: 'Spread all parts out on the bed so none overlap — ready for one print job.', run: () => A.arrangeAll(printerById(store.state.printerId).x - 10), keywords: 'pack layout plate' },
+  { id: 'print.printer', label: 'Choose printer', group: 'Print', icon: Printer, desc: 'Pick your printer so the bed size is right.', run: () => store.set({ dialog: 'print' }) },
 
   // inspect + view
   { id: 'inspect.measure', label: 'Measure', group: 'Inspect', icon: Ruler, desc: 'Click two points to measure the distance between them.', key: 'I', run: () => store.set({ mode: store.state.mode === 'measure' ? 'model' : 'measure', measure: { a: null, b: null } }), active: () => store.state.mode === 'measure', enabled: inModel },

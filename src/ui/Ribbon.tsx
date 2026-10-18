@@ -5,6 +5,7 @@ import { store } from '../core/store';
 import { align, addShape } from '../core/actions';
 import { SHAPES, type ShapeCategory } from '../core/primitives';
 import { shapeThumbnail } from '../viewport/thumbnails';
+import { PRINTERS, printerById } from '../core/printing';
 import { useClickOutside, useStore } from './hooks';
 import { cmd } from './commands';
 
@@ -175,13 +176,26 @@ function SketchRibbon() {
   );
 }
 
-type Tab = 'create' | 'modify' | 'inspect' | 'output';
+function PrinterPicker() {
+  const id = useStore((s) => s.printerId);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '0 6px', justifyContent: 'center' }}
+      data-tip-title="Your printer" data-tip-desc="Sets the bed size used for the bed outline and the print check.">
+      <select class="select" style={{ width: 190 }} value={id} onChange={(e) => store.set({ printerId: (e.currentTarget as HTMLSelectElement).value, showBed: true })}>
+        {PRINTERS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+      <span class="tool-label" style={{ textAlign: 'center' }}>{(() => { const p = printerById(id); return `${p.x} × ${p.z} × ${p.y} mm`; })()}</span>
+    </div>
+  );
+}
+
+type Tab = 'create' | 'modify' | 'inspect' | 'print' | 'output';
 
 export function Ribbon() {
   const mode = useStore((s) => s.mode);
   const [tab, setTab] = useState<Tab>('create');
   const sketching = mode === 'sketch';
-  const tabs: [Tab, string][] = [['create', 'Create'], ['modify', 'Modify'], ['inspect', 'Inspect'], ['output', 'Output']];
+  const tabs: [Tab, string][] = [['create', 'Create'], ['modify', 'Modify'], ['inspect', 'Inspect'], ['print', 'Print'], ['output', 'Output']];
   return (
     <div class="ribbon" data-tour="ribbon">
       <div class="ribbon-tabs">
@@ -279,6 +293,25 @@ export function Ribbon() {
               <Tool id="view.showAll" />
             </Group>
           </>}
+          {tab === 'print' && <>
+            <Group label="Printer">
+              <PrinterPicker />
+              <Tool id="print.bed" label="Bed" />
+            </Group>
+            <Group label="Prepare">
+              <Tool id="print.layflat" />
+              <Tool id="print.drop" label="To bed" />
+              <Tool id="print.arrange" label="Arrange" />
+            </Group>
+            <Group label="Check">
+              <Tool id="print.overhangs" />
+              <Tool id="print.check" label="Print check" />
+            </Group>
+            <Group label="Export">
+              <Tool id="export.3mf" label="3MF" />
+              <Tool id="export.stl" label="STL" />
+            </Group>
+          </>}
           {tab === 'output' && <>
             <Group label="Design file">
               <Tool id="file.new" label="New" />
@@ -287,6 +320,7 @@ export function Ribbon() {
               <Tool id="file.import" label="Import" />
             </Group>
             <Group label="Export">
+              <Tool id="export.3mf" label="3MF" />
               <Tool id="export.stl" label="STL" />
               <Tool id="export.obj" label="OBJ" />
               <Tool id="export.glb" label="GLB" />
