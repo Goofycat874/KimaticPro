@@ -760,3 +760,8 @@ code { font-family: var(--mono); font-size: 0.92em; background: var(--panel-2); 
 }
 .mini-grid.cols-3 { grid-template-columns: repeat(3, 26px); }
 .mini-tool:disabled { opacity: 0.35; cursor: default; }
+
+/* touch screens get a Multi-select toggle (there's no Shift key to hold) */
+@media (hover: hover) and (pointer: fine) { .app:not(.mobile) .touch-only { display: none !important; } }
+.nav-multi { display: contents; }
+.nav-multi .icon-btn.active { background: var(--accent); color: #fff; }

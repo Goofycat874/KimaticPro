@@ -7,7 +7,7 @@ import {
   Check, Upload, ScanEye, Crosshair, Diamond, SquareDashed, Pill, Ghost, Printer, BedDouble, PanelBottom, LayoutGrid,
   TriangleAlert, ClipboardCheck, Blend, SquareSplitVertical, Variable, SquareRoundCorner, PackageOpen, Triangle, FileBox,
   DraftingCompass, RulerDimensionLine, CircleDot, MoveHorizontal, MoveVertical, Pause, TriangleRight, Equal, Target,
-  GitCommitHorizontal, Lock, EyeOff, FileText, Drill, SquareSquare,
+  GitCommitHorizontal, Lock, EyeOff, FileText, Drill, SquareSquare, ListChecks,
 } from 'lucide-preact';
 import type { ConstraintType } from '../core/types';
 import { store } from '../core/store';
@@ -56,6 +56,11 @@ export const COMMANDS: Command[] = [
   { id: 'edit.paste', label: 'Paste', group: 'Edit', icon: Copy, desc: 'Paste copies of what you copied.', key: 'Ctrl+V', run: () => A.paste() },
   { id: 'edit.duplicate', label: 'Duplicate', group: 'Edit', icon: Copy, desc: 'Make a copy of the selected bodies.', key: 'Ctrl+D', run: () => A.duplicate(), enabled: hasSel },
   { id: 'edit.delete', label: 'Delete', group: 'Edit', icon: Trash2, desc: 'Remove the selection.', key: 'Delete', run: () => A.deleteSelection(), enabled: () => hasSel() || !!store.state.selectedFeature || store.state.sketchSelection.length > 0 },
+  { id: 'edit.multiSelect', label: 'Multi-select', group: 'Edit', icon: ListChecks, desc: 'For touch screens: while on, every tap adds or removes an item from the selection — like holding Shift. Then Join, Cut or move them together.', run: () => {
+    const on = !store.state.multiSelect;
+    store.set({ multiSelect: on });
+    if (on) store.toast('Multi-select on: tap things to add or remove them.');
+  }, active: () => store.state.multiSelect, keywords: 'select several many multiple shift touch phone tablet' },
   { id: 'edit.selectAll', label: 'Select all', group: 'Edit', icon: MousePointer2, desc: 'Select every visible body.', key: 'Ctrl+A', run: () => A.selectAll() },
 
   // create

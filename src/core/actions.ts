@@ -62,9 +62,9 @@ export function selectionBounds(ids = store.state.selection) {
 // selection
 
 export function select(ids: string[], additive = false) {
-  const { selection } = store.state;
+  const { selection, multiSelect } = store.state;
   let next = ids;
-  if (additive) {
+  if (additive || (multiSelect && ids.length)) {
     const set = new Set(selection);
     for (const id of ids) set.has(id) ? set.delete(id) : set.add(id);
     next = [...set];

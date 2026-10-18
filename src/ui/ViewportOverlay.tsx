@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import {
-  Drill,
+  Drill, ListChecks,
   House, Focus, Diamond, Grid3x3, Scissors, Eye, Move, Rotate3d, Scale3d, X, Check, PenLine, Ruler, Box as BoxIcon,
   Copy, Trash2, ArrowDownToLine, EyeOff, Ghost, SquaresUnite, ScanEye, Palette, ArrowUpFromLine, Shapes, PanelBottom, Layers2, SlidersHorizontal, SquareRoundCorner,
 } from 'lucide-preact';
@@ -16,7 +16,7 @@ import { cmd } from './commands';
 import { NumberField } from './controls';
 
 function NavBtn({ id, icon: Icon, label }: { id: string; icon: any; label?: string }) {
-  useStore((s) => [s.projection, s.showGrid, s.section, s.showGhosts, s.displayMode]);
+  useStore((s) => [s.projection, s.showGrid, s.section, s.showGhosts, s.displayMode, s.multiSelect]);
   const c = cmd(id);
   return (
     <button class={`icon-btn ${c.active?.() ? 'active' : ''}`} onClick={c.run} data-tip-title={label ?? c.label} data-tip-desc={c.desc} data-tip-key={c.key}>
@@ -30,6 +30,8 @@ function NavBar() {
   const modes: [typeof dm, string, string][] = [['shaded', 'Shaded', 'Smooth solid look'], ['edges', 'Shaded + edges', 'Solid with crisp outlines (default)'], ['wire', 'Wireframe', 'Just the edges'], ['xray', 'X-ray', 'See-through, to look inside']];
   return (
     <div class="navbar" data-tour="navbar">
+      <span class="touch-only nav-multi"><NavBtn id="edit.multiSelect" icon={ListChecks} /></span>
+      <div class="sep touch-only" />
       <NavBtn id="view.home" icon={House} />
       <NavBtn id="view.fit" icon={Focus} />
       <NavBtn id="view.ortho" icon={Diamond} />
@@ -219,6 +221,7 @@ function ContextMenu() {
     <div class="ctx-menu" ref={ref} style={{ left: Math.max(8, cm.x + shift.x), top: Math.max(8, cm.y + shift.y) }}>
       {body ? <>
         <div class="menu-label">{multi ? `${store.state.selection.length} bodies` : body.name}</div>
+        {!store.state.multiSelect && <button class="menu-item touch-only" onClick={close(() => cmd('edit.multiSelect').run())}><ListChecks size={14} /><span class="grow">Select more…</span></button>}
         <button class="menu-item" onClick={close(() => A.duplicate())}><Copy size={14} /><span class="grow">Duplicate</span><span class="kbd">Ctrl+D</span></button>
         {multi && <button class="menu-item" onClick={close(() => A.combine('join'))}><SquaresUnite size={14} /><span class="grow">Join</span></button>}
         {!multi && body.editableFeatureId && featureOf(store.doc, body.editableFeatureId)?.type !== 'move' &&

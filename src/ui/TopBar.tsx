@@ -51,7 +51,7 @@ export function TopBar() {
       </div>
       <MenuButton cls="mobile-only" label={<Menu size={18} />}
         items={['file.new', 'file.open', 'file.save', 'file.import', 'file.importDxf', '-', 'print.check', 'output.drawing', 'export.sketchDxf', 'export.step', 'export.3mf', 'export.stl', 'export.glb', 'export.png', '-',
-          'edit.duplicate', 'edit.delete', 'edit.selectAll', '-', 'modify.params', 'view.home', 'view.fit', 'view.ortho', 'view.grid', 'view.showAll', 'view.theme', '-', 'help.tour']} />
+          'edit.multiSelect', 'edit.selectAll', 'edit.duplicate', 'edit.delete', '-', 'modify.params', 'view.home', 'view.fit', 'view.ortho', 'view.grid', 'view.showAll', 'view.theme', '-', 'help.tour']} />
       <MenuButton cls="desktop-only" label={<><Menu size={16} /> File <ChevronDown size={13} /></>}
         items={['file.new', 'file.open', 'file.save', '-', 'file.import', 'file.importDxf', '-', 'print.check', 'output.drawing', 'export.sketchDxf', 'export.step', 'export.3mf', 'export.stl', 'export.obj', 'export.glb', 'export.png']} />
       <MenuButton cls="desktop-only" label={<>Edit <ChevronDown size={13} /></>}

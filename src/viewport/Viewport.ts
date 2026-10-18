@@ -804,7 +804,8 @@ export class Viewport {
     if (hit?.object.userData.ghostFeature) { selectFeature(hit.object.userData.ghostFeature); return; }
     const id = hit?.object.userData.bodyId as string | undefined;
     if (id) select([id], e.shiftKey || e.ctrlKey || e.metaKey);
-    else if (!e.shiftKey) select([]);
+    // with multi-select on, a stray tap on empty space shouldn't wipe what you picked
+    else if (!e.shiftKey && !store.state.multiSelect) select([]);
   }
 
   private snapToVertex(hit: THREE.Intersection, e: PointerEvent) {

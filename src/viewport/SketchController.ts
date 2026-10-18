@@ -673,7 +673,7 @@ export class SketchController {
     if (tool === 'select') {
       const hit = this.hitRef(raw, { inside: true });
       const cur = store.state.sketchSelection;
-      const multi = e.shiftKey || e.ctrlKey || e.metaKey;
+      const multi = e.shiftKey || e.ctrlKey || e.metaKey || store.state.multiSelect;
       if (!hit) {
         this.box = { start: raw, end: raw, add: multi };
         if (!multi) store.set({ sketchSelection: [] });

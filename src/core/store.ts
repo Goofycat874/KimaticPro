@@ -34,6 +34,8 @@ export interface AppState {
   showConstraints: boolean;
   /** Corner radius for the sketch Fillet tool, and distance for Offset. */
   sketchFilletR: number;
+  /** Touch screens: every tap adds to (or removes from) the selection, like holding Shift. */
+  multiSelect: boolean;
   sketchOffset: number;
   polygonSides: number;
   gizmo: GizmoMode;
@@ -107,6 +109,7 @@ export class Store {
       sketchConstraint: null,
       showConstraints: true,
       sketchFilletR: 2,
+      multiSelect: false,
       sketchOffset: 2,
       polygonSides: 6,
       gizmo: 'translate',
