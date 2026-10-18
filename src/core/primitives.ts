@@ -38,6 +38,9 @@ export interface ShapeDef {
 
 const font = new Font(fontJson as any);
 
+/** Letter outlines (with holes) for a string, in font units = mm at `size`. */
+export const textShapes = (text: string, size: number) => font.generateShapes(text, size);
+
 const mm = (key: string, label: string, def: number, min = 0.1, max = 2000, hint?: string): ParamDef => ({
   key, label, type: 'number', default: def, min, max, step: 1, unit: 'mm', hint,
 });

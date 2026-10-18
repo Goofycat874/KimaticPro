@@ -151,6 +151,36 @@ export interface SweepFeature extends FeatureBase {
   appearance: Appearance;
 }
 
+/**
+ * Precise-kernel edits. Edges and faces are referenced by a point on them (world
+ * space, captured when they were clicked); the nearest matching edge/face is used
+ * on every rebuild so the reference survives most upstream edits.
+ */
+export interface FilletFeature extends FeatureBase {
+  type: 'fillet';
+  bodyId: string;
+  mode: 'fillet' | 'chamfer';
+  /** Points on the edges to round. Empty = every edge of the body. */
+  edges: Vec3[];
+  radius: number;
+}
+
+export interface ShellFeature extends FeatureBase {
+  type: 'shell';
+  bodyId: string;
+  /** Points on faces to remove (open). Empty = closed hollow body. */
+  faces: Vec3[];
+  thickness: number;
+}
+
+export interface DraftFeature extends FeatureBase {
+  type: 'draft';
+  bodyId: string;
+  /** Points on the faces to taper. */
+  faces: Vec3[];
+  angle: number;
+}
+
 export interface SplitFeature extends FeatureBase {
   type: 'split';
   bodyId: string;
@@ -162,6 +192,8 @@ export interface ImportFeature extends FeatureBase {
   type: 'import';
   /** Base64-encoded Float32Array of triangle positions (non-indexed). */
   data: string;
+  /** Original STEP text, so the precise kernel keeps exact geometry. */
+  step?: string;
   transform: TRS;
   appearance: Appearance;
 }
@@ -178,7 +210,10 @@ export type Feature =
   | ImportFeature
   | LoftFeature
   | SweepFeature
-  | SplitFeature;
+  | SplitFeature
+  | FilletFeature
+  | ShellFeature
+  | DraftFeature;
 
 export type FeatureType = Feature['type'];
 

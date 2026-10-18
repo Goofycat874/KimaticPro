@@ -121,10 +121,20 @@ export interface Profile {
  * so drawing a circle inside a circle gives you a washer automatically.
  */
 export function sketchProfiles(entities: SketchEntity[]): Profile[] {
+  return sketchProfileEntities(entities).map((p) => ({ outer: p.outer, holes: p.holes }));
+}
+
+export interface EntityProfile extends Profile {
+  outerEntity: SketchEntity;
+  holeEntities: SketchEntity[];
+}
+
+/** Same as sketchProfiles, but remembers which entity each loop came from (for exact curves). */
+export function sketchProfileEntities(entities: SketchEntity[]): EntityProfile[] {
   const loops = entities
-    .map((e) => entityOutline(e))
-    .filter((o) => o.closed && o.points.length >= 3)
-    .map((o) => ({ pts: o.points, area: Math.abs(signedArea(o.points)) }))
+    .map((e) => ({ e, o: entityOutline(e) }))
+    .filter(({ o }) => o.closed && o.points.length >= 3)
+    .map(({ e, o }) => ({ e, pts: o.points, area: Math.abs(signedArea(o.points)) }))
     .filter((l) => l.area > 1e-6)
     .sort((a, b) => b.area - a.area);
 
@@ -141,15 +151,15 @@ export function sketchProfiles(entities: SketchEntity[]): Profile[] {
     depth[i] = p === -1 ? 0 : depth[p] + 1;
   });
 
-  const profiles: Profile[] = [];
+  const profiles: EntityProfile[] = [];
   const indexOf = new Map<number, number>();
   loops.forEach((l, i) => {
     if (depth[i] % 2 === 0) {
       indexOf.set(i, profiles.length);
-      profiles.push({ outer: l.pts, holes: [] });
+      profiles.push({ outer: l.pts, holes: [], outerEntity: l.e, holeEntities: [] });
     } else {
       const pi = indexOf.get(parent[i]);
-      if (pi !== undefined) profiles[pi].holes.push(l.pts);
+      if (pi !== undefined) { profiles[pi].holes.push(l.pts); profiles[pi].holeEntities.push(l.e); }
     }
   });
   return profiles;

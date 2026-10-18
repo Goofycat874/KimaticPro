@@ -154,14 +154,16 @@ export function sweepPath(entities: SketchEntity[], matrix: THREE.Matrix4) {
   const o = entityOutline(open, 96);
   const pts = o.points.map(([x, y]) => new THREE.Vector3(x, y, 0).applyMatrix4(matrix));
   if (pts.length < 2) throw new Error('The path needs at least two points.');
-  return { points: pts, closed: o.closed };
+  const normal = new THREE.Vector3();
+  matrix.extractBasis(new THREE.Vector3(), new THREE.Vector3(), normal);
+  return { points: pts, closed: o.closed, normal: normal.normalize() };
 }
 
 /**
  * Sweep a closed cross-section along a path. The section is centred on the path and
  * held perpendicular to it with rotation-minimising frames (no sudden flips).
  */
-export function sweepGeometry(profile: Profile, path: { points: THREE.Vector3[]; closed: boolean }, twistDeg = 0): THREE.BufferGeometry {
+export function sweepGeometry(profile: Profile, path: { points: THREE.Vector3[]; closed: boolean; normal?: THREE.Vector3 }, twistDeg = 0): THREE.BufferGeometry {
   const shape = profileToShape(profile);
   // centre the section on its own bounding box so it rides on the path
   const box = new THREE.Box2();
@@ -172,6 +174,21 @@ export function sweepGeometry(profile: Profile, path: { points: THREE.Vector3[];
     holes: profile.holes.map((h) => h.map(([x, y]) => [x - c.x, y - c.y] as Vec2)),
   });
   const curve = new THREE.CatmullRomCurve3(path.points, path.closed, 'centripetal', 0.5);
+  if (path.normal) {
+    // Lock the section to the path's sketch plane (the same convention as the precise kernel):
+    // profile u runs along the plane normal, v along the in-plane normal.
+    const np = path.normal.clone();
+    curve.computeFrenetFrames = (segments: number, closed: boolean) => {
+      const tangents: THREE.Vector3[] = [], normals: THREE.Vector3[] = [], binormals: THREE.Vector3[] = [];
+      for (let i = 0; i <= segments; i++) {
+        const t = curve.getTangentAt(closed ? (i % segments) / segments : i / segments).normalize();
+        tangents.push(t);
+        normals.push(np.clone());
+        binormals.push(new THREE.Vector3().crossVectors(t, np).normalize());
+      }
+      return { tangents, normals, binormals };
+    };
+  }
   // gently round sharp polyline corners while keeping straight runs straight
   const length = curve.getLength();
   const steps = Math.min(600, Math.max(16, Math.round(length / 1.5)));

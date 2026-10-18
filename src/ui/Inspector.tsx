@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import {
   Box, PenLine, Copy, ArrowDownToLine, EyeOff, Trash2, Lightbulb, TriangleAlert, Pencil, ArrowUpFromLine, RotateCw,
   SquaresUnite, SquaresSubtract, SquaresIntersect, Repeat, FlipHorizontal2, Move, Upload, Ruler, Sparkles, Orbit, CircleOff,
-  Blend, Spline, SquareSplitVertical, ArrowUp, ArrowDown,
+  Blend, Spline, SquareSplitVertical, ArrowUp, ArrowDown, SquareRoundCorner, PackageOpen, Triangle,
   X,
 } from 'lucide-preact';
 import { store } from '../core/store';
@@ -34,6 +34,9 @@ const TYPE_META: Record<Feature['type'], { label: string; color: string; icon: a
   loft: { label: 'Loft', color: '#10b981', icon: Blend },
   sweep: { label: 'Sweep', color: '#0ea5e9', icon: Spline },
   split: { label: 'Split', color: '#f43f5e', icon: SquareSplitVertical },
+  fillet: { label: 'Fillet', color: '#eab308', icon: SquareRoundCorner },
+  shell: { label: 'Shell', color: '#0d9488', icon: PackageOpen },
+  draft: { label: 'Draft', color: '#7c3aed', icon: Triangle },
 };
 export { TYPE_META };
 

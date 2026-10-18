@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { Brush, Evaluator, ADDITION, SUBTRACTION, INTERSECTION } from 'three-bvh-csg';
-import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { normalizeGeometry } from './geometry';
 
 // Printable hardware: threads, bolts, nuts, screw holes and containers.
@@ -175,17 +174,29 @@ export function screwHole(p: { diameter: number; depth: number; head: string; he
   return lathe(pts, 48);
 }
 
-/** An open-top box (or tray) with a floor and walls — perfect for organisers. */
+/** An open-top box (or tray) with a floor and walls — perfect for organisers. Flat bottom, rounded corners. */
 export function container(p: { width: number; height: number; depth: number; wall: number; floor: number; round: number }) {
   const w = Math.max(p.wall * 2 + 0.5, p.width), d = Math.max(p.wall * 2 + 0.5, p.depth);
-  const r = Math.min(p.round, Math.min(w, d) / 2 - 0.01, p.height / 2 - 0.01);
-  const outer = r > 0.05 ? new RoundedBoxGeometry(w, p.height, d, 4, r) : new THREE.BoxGeometry(w, p.height, d);
-  outer.translate(0, p.height / 2, 0);
+  const r = Math.min(p.round, Math.min(w, d) / 2 - 0.01);
   const ir = Math.max(0, r - p.wall);
-  const iw = w - p.wall * 2, id = d - p.wall * 2, ih = p.height * 2;
-  const inner = ir > 0.05 ? new RoundedBoxGeometry(iw, ih, id, 4, Math.min(ir, iw / 2 - 0.01, id / 2 - 0.01)) : new THREE.BoxGeometry(iw, ih, id);
-  inner.translate(0, p.floor + ih / 2, 0);
-  return op(outer, inner, 'sub');
+  const prism = (pw: number, pd: number, pr: number, y0: number, h: number) => {
+    const s = new THREE.Shape();
+    const x = -pw / 2, z = -pd / 2;
+    if (pr > 0.01) {
+      s.moveTo(x + pr, z);
+      s.lineTo(x + pw - pr, z); s.absarc(x + pw - pr, z + pr, pr, -Math.PI / 2, 0, false);
+      s.lineTo(x + pw, z + pd - pr); s.absarc(x + pw - pr, z + pd - pr, pr, 0, Math.PI / 2, false);
+      s.lineTo(x + pr, z + pd); s.absarc(x + pr, z + pd - pr, pr, Math.PI / 2, Math.PI, false);
+      s.lineTo(x, z + pr); s.absarc(x + pr, z + pr, pr, Math.PI, Math.PI * 1.5, false);
+    } else {
+      s.moveTo(x, z); s.lineTo(x + pw, z); s.lineTo(x + pw, z + pd); s.lineTo(x, z + pd);
+    }
+    const g = new THREE.ExtrudeGeometry(s, { depth: h, bevelEnabled: false, curveSegments: 12 });
+    g.rotateX(-Math.PI / 2);
+    g.translate(0, y0, 0);
+    return g;
+  };
+  return op(prism(w, d, r, 0, p.height), prism(w - p.wall * 2, d - p.wall * 2, ir, p.floor, p.height * 2), 'sub');
 }
 
 export { metricPitch } from './expr';
