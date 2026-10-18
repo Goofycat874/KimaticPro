@@ -1,0 +1,22 @@
+{
+  "name": "kimatic-maps-mcp",
+  "version": "0.1.0",
+  "description": "Fast, key-free maps MCP server: geocoding, routing, travel-time matrices and nearby places from OpenStreetMap.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "start": "node src/index.ts",
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "typescript": "^5.9.3"
+  }
+}

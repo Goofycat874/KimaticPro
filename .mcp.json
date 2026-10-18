@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "maps": {
+      "command": "node",
+      "args": ["mcp/maps/src/index.ts"]
+    }
+  }
+}
