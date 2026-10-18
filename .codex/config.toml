@@ -1,0 +1,10 @@
+# Codex project config (loaded when you trust this project).
+# The maps MCP server: geocoding, directions, travel times and nearby places from
+# OpenStreetMap. Run `npm install` in mcp/maps once first.
+
+[mcp_servers.maps]
+command = "node"
+# finds the repo root with git, so it starts no matter which folder Codex runs in
+args = ["-e", 'import(require("node:url").pathToFileURL(require("node:child_process").execSync("git rev-parse --show-toplevel", { encoding: "utf8" }).trim() + "/mcp/maps/src/index.ts").href)']
+startup_timeout_sec = 20
+tool_timeout_sec = 60

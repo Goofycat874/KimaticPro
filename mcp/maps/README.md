@@ -1,6 +1,6 @@
 # kimatic-maps — a fast, free maps MCP server
 
-Give Claude (or any MCP client) real map skills: find places, get directions, compare travel times and see what's nearby. Built on OpenStreetMap, so there's **no API key and no bill**.
+Give Claude, Codex (or any MCP client) real map skills: find places, get directions, compare travel times and see what's nearby. Built on OpenStreetMap, so there's **no API key and no bill**.
 
 | Tool | What it does |
 | --- | --- |
@@ -41,6 +41,31 @@ Claude Desktop (`claude_desktop_config.json`):
 ```json
 { "mcpServers": { "maps": { "command": "node", "args": ["/absolute/path/to/mcp/maps/src/index.ts"] } } }
 ```
+
+## Use it with Codex
+
+In this repo it's already set up in `.codex/config.toml`. Trust the project when Codex asks, and the `maps` server starts from whichever folder you run Codex in (it finds the repo root with `git`). Run `/mcp` in Codex to check it's connected.
+
+Anywhere else, add it once for your user:
+
+```bash
+codex mcp add maps -- node /absolute/path/to/mcp/maps/src/index.ts
+```
+
+or put this in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.maps]
+command = "node"
+args = ["/absolute/path/to/mcp/maps/src/index.ts"]
+startup_timeout_sec = 20
+tool_timeout_sec = 60
+
+[mcp_servers.maps.env]
+MAPS_LANGUAGE = "en"   # optional, see Settings below
+```
+
+The Codex IDE extension reads the same config.
 
 Then just ask: *"How long is the walk from the Louvre to the Eiffel Tower?"*, *"Find EV chargers within 2 km of 37.7749, -122.4194"*, or *"Which of these three offices is closest by car to each of our clients?"*
 
