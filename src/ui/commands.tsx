@@ -12,7 +12,7 @@ import {
 import type { ConstraintType } from '../core/types';
 import { store } from '../core/store';
 import * as A from '../core/actions';
-import { exportAs, pickFile, saveProject } from '../core/io';
+import { exportAs, exportSketchDXF, pickFile, saveProject } from '../core/io';
 import { printerById } from '../core/printing';
 
 export interface Command {
@@ -39,6 +39,8 @@ export const COMMANDS: Command[] = [
   { id: 'file.open', label: 'Open…', group: 'File', icon: FolderOpen, desc: 'Open a .kimatic design, or import an STL / OBJ mesh.', key: 'Ctrl+O', run: () => pickFile() },
   { id: 'file.save', label: 'Save', group: 'File', icon: Save, desc: 'Download your design as a .kimatic file you can reopen and keep editing.', key: 'Ctrl+S', run: saveProject },
   { id: 'file.import', label: 'Import model', group: 'File', icon: Upload, desc: 'Bring in a STEP (exact CAD), STL or OBJ model from another app.', run: () => pickFile('.step,.stp,.stl,.obj'), keywords: 'step stp stl obj' },
+  { id: 'file.importDxf', label: 'Import DXF', group: 'File', icon: Upload, desc: '2D outlines from other CAD, Inkscape or laser-cutting files become a sketch you can extrude. Lands in the open sketch if you’re sketching.', run: () => pickFile('.dxf'), keywords: 'dxf 2d laser cnc inkscape autocad outline' },
+  { id: 'export.sketchDxf', label: 'Export sketch DXF', group: 'Export', icon: Download, desc: 'Save a sketch at true 1:1 size for laser cutters, CNC routers and other CAD.', run: () => exportSketchDXF(), enabled: () => store.state.result.sketches.length > 0, keywords: 'dxf laser cnc 2d cut' },
   { id: 'export.stl', label: 'Export STL (3D print)', group: 'Export', icon: Download, desc: 'The standard file for 3D printers and slicers.', key: 'Ctrl+E', run: () => exportAs('stl'), keywords: 'print slicer cura prusa' },
   { id: 'export.3mf', label: 'Export 3MF (3D print)', group: 'Export', icon: Download, desc: 'The modern slicer format: exact millimetres, separate parts and colours. Best for Bambu, Prusa and Cura.', run: () => exportAs('3mf'), keywords: 'print slicer bambu orca prusa' },
   { id: 'export.step', label: 'Export STEP (CAD)', group: 'Export', icon: FileBox, desc: 'Exact solids for SolidWorks, Fusion, Onshape, FreeCAD and machine shops.', run: () => exportAs('step'), keywords: 'stp iso 10303 solidworks fusion onshape freecad cnc' },

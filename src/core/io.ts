@@ -6,7 +6,7 @@ import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { store, emptyDoc } from './store';
-import { importMesh, viewApi } from './actions';
+import { importMesh, importSketchEntities, viewApi } from './actions';
 import { encodePositions } from './geometry';
 import { materialById } from './materials';
 import { build3MF } from './printing';
@@ -153,6 +153,12 @@ export async function openFile(file: File) {
       const r = await kernel.importStep(await file.text());
       importMesh(base, r.mesh, r.step);
       store.toast(`Imported ${base} (${r.faces} faces, exact)`, 'success');
+    } else if (ext === 'dxf') {
+      const { parseDXF } = await import('./dxf');
+      const r = parseDXF(await file.text());
+      importSketchEntities(base, r.entities);
+      const skipped = Object.entries(r.skipped).map(([k, n]) => `${n} ${k}`).join(', ');
+      if (r.entities.length) store.toast(`Imported ${r.entities.length} shapes from ${file.name}${skipped ? ` (skipped ${skipped})` : ''}. Extrude it to make it 3D.`, 'success');
     } else if (ext === 'stl') {
       const geo = new STLLoader().parse(await file.arrayBuffer());
       // STL is Z-up: rotate into KimaticPro's Y-up world
@@ -163,7 +169,7 @@ export async function openFile(file: File) {
       const obj = new OBJLoader().parse(await file.text());
       importMesh(base, encodePositions(groundPositions(new Float32Array(meshPositions(obj)))));
     } else {
-      store.toast(`Can't open .${ext} files yet. Try .kimatic, .step, .stl or .obj`, 'error');
+      store.toast(`Can't open .${ext} files yet. Try .kimatic, .step, .dxf, .stl or .obj`, 'error');
     }
   } catch (err: any) {
     store.toast(err?.message ?? 'Could not open that file', 'error');
@@ -180,10 +186,19 @@ function groundPositions(pos: Float32Array) {
   return pos;
 }
 
-export function pickFile(accept = '.kimatic,.json,.step,.stp,.stl,.obj') {
+export function pickFile(accept = '.kimatic,.json,.step,.stp,.dxf,.stl,.obj') {
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = accept;
   input.onchange = () => { if (input.files?.[0]) openFile(input.files[0]); };
   input.click();
+}
+
+/** Save the open (or selected) sketch as a 1:1 DXF for laser cutters, CNC and other CAD. */
+export async function exportSketchDXF() {
+  const id = store.state.sketchId ?? store.state.selectedFeature;
+  const sk = store.state.result.sketches.find((s) => s.featureId === id) ?? [...store.state.result.sketches].reverse()[0];
+  if (!sk || !sk.entities.length) { store.toast('Open or select a sketch with shapes first.', 'error'); return; }
+  const { sketchToDXF } = await import('./dxf');
+  download(new Blob([sketchToDXF(sk.entities)], { type: 'application/dxf' }), `${(sk.name || 'sketch').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') || 'sketch'}.dxf`);
 }

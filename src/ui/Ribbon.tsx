@@ -358,9 +358,11 @@ export function Ribbon() {
               <Tool id="file.open" label="Open" />
               <Tool id="file.save" />
               <Tool id="file.import" label="Import" />
+              <Tool id="file.importDxf" label="DXF in" />
             </Group>
             <Group label="Documentation">
               <Tool id="output.drawing" label="Drawing" />
+              <Tool id="export.sketchDxf" label="Sketch DXF" />
             </Group>
             <Group label="Export">
               <Tool id="export.step" label="STEP" />

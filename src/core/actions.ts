@@ -799,6 +799,23 @@ export function setDimensionOffset(id: string, offset: [number, number], live: b
   else store.commit('Move dimension', r);
 }
 
+/** Bring imported 2D geometry (e.g. from DXF) into the open sketch, or a new sketch on the ground. */
+export function importSketchEntities(name: string, entities: SketchEntity[]) {
+  if (!entities.length) { store.toast('No 2D shapes found in that file.', 'error'); return; }
+  const open = activeSketch();
+  if (open && store.state.mode === 'sketch') {
+    store.commit(`Import ${name}`, sketchRecipe((s) => { s.entities.push(...entities); }));
+  } else {
+    const id = uid('s');
+    const plane = STANDARD_PLANES.top;
+    store.commit(`Import ${name}`, (doc) => {
+      insertFeature(doc, { id, type: 'sketch', name, plane, entities, visible: true } satisfies SketchFeature);
+    }, { mode: 'sketch', sketchId: id, sketchTool: 'select', sketchSelection: [], selectedFeature: id, selection: [] });
+    viewApi.lookAtPlane?.(plane);
+  }
+  setTimeout(() => viewApi.fit?.(), 60);
+}
+
 export function finishSketch() {
   const id = store.state.sketchId;
   const f = featureOf(store.doc, id);
