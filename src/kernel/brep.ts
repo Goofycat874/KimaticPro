@@ -3,7 +3,7 @@ import * as R from 'replicad';
 import type { Kernel, Placed } from '../core/kernel';
 import type { SketchEntity, Vec2, Vec3 } from '../core/types';
 import { buildShape, defaultParams, shapeById, textShapes } from '../core/primitives';
-import { entityOutline, sketchProfileEntities, type EntityProfile } from '../core/sketch';
+import { entityOutline, sketchProfileEntities, type EntityProfile, type LoopSource } from '../core/sketch';
 import { meshBoolean, meshKernel } from '../core/meshKernel';
 import { hash, matKey } from '../core/evalCore';
 
@@ -107,14 +107,33 @@ function polyDrawing(pts: Vec2[]): R.Drawing {
   return pen.close();
 }
 
-/** An exact drawing for one closed sketch entity: real circles and arcs, not polygons. */
-function entityDrawing(e: SketchEntity): R.Drawing {
+/** An exact drawing for one closed loop: real circles and arcs, not polygons. */
+function entityDrawing(e: LoopSource): R.Drawing {
   switch (e.kind) {
+    case 'chain': {
+      const start = e.segs[0].t === 'pts' ? e.segs[0].pts[0] : e.segs[0].a;
+      let pen = R.draw(start);
+      let at = start;
+      const far = (p: Vec2) => Math.hypot(p[0] - at[0], p[1] - at[1]) > 1e-7;
+      e.segs.forEach((sg, i) => {
+        const closing = i === e.segs.length - 1;
+        if (sg.t === 'pts') {
+          for (const p of sg.pts.slice(1, closing ? -1 : undefined)) if (far(p)) { pen = pen.lineTo(p); at = p; }
+        } else if (closing) {
+          if (sg.t === 'arc') pen = pen.threePointsArcTo(start, sg.m);
+        } else if (far(sg.b)) {
+          pen = sg.t === 'line' ? pen.lineTo(sg.b) : pen.threePointsArcTo(sg.b, sg.m);
+          at = sg.b;
+        }
+      });
+      return pen.close();
+    }
     case 'circle':
       return R.drawCircle(e.r).translate(e.cx, e.cy);
     case 'rect': {
-      const r = Math.max(0, Math.min(e.radius ?? 0, e.w / 2 - 1e-4, e.h / 2 - 1e-4));
-      return (r > 1e-4 ? R.drawRoundedRectangle(e.w, e.h, r) : R.drawRectangle(e.w, e.h)).translate(e.x + e.w / 2, e.y + e.h / 2);
+      const w = Math.abs(e.w), h = Math.abs(e.h);
+      const r = Math.max(0, Math.min(e.radius ?? 0, w / 2 - 1e-4, h / 2 - 1e-4));
+      return (r > 1e-4 ? R.drawRoundedRectangle(w, h, r) : R.drawRectangle(w, h)).translate(e.x + e.w / 2, e.y + e.h / 2);
     }
     case 'slot': {
       const dx = e.x2 - e.x1, dy = e.y2 - e.y1;
@@ -477,7 +496,7 @@ export const brepKernel: Kernel<BSolid> = {
       const start = spine.startPoint, tan = spine.tangentAt(0);
       const tangent = new THREE.Vector3(tan.x, tan.y, tan.z).normalize();
       const plane = new R.Plane([start.x, start.y, start.z], np.toArray() as Vec3, tangent.toArray() as Vec3);
-      const sweepOne = (e: SketchEntity) => {
+      const sweepOne = (e: LoopSource) => {
         const sk = entityDrawing(e).translate(-c.x, -c.y).sketchOnPlane(plane.clone()) as R.Sketch;
         return R.genericSweep(sk.wire, spine.clone(), { frenet: true }, false) as R.Shape3D;
       };

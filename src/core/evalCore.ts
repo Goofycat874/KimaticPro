@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Appearance, BodyOp, DesignDoc, Feature, PlaneDef, SketchEntity, TRS } from './types';
 import type { Kernel, Placed } from './kernel';
 import { planeMatrix } from './sketch';
+import { solveSketch, withValues } from './constraints';
 import { evalExpr, resolveParams, setPath } from './expr';
 
 // The timeline engine: replays features in order and keeps track of which body is
@@ -157,8 +158,17 @@ export function runFeatures<S>(kernel: Kernel<S>, doc: DesignDoc): CoreResult<S>
           break;
         }
         case 'sketch': {
+          let entities = f.entities;
+          // dimensions driven by parameters re-solve the sketch whenever a parameter changes
+          if (f.constraints?.some((c) => c.expr)) {
+            const errs: string[] = [];
+            const r = solveSketch(f.entities, withValues(f.constraints, vars, errs));
+            if (r.ok) entities = r.entities;
+            if (errs.length) errors[f.id] = errs[0];
+            else if (!r.ok) errors[f.id] = 'Some sketch dimensions can’t all be met with these parameter values.';
+          }
           sketches.set(f.id, {
-            featureId: f.id, name: f.name, plane: f.plane, matrix: planeMatrix(f.plane), entities: f.entities, visible: f.visible,
+            featureId: f.id, name: f.name, plane: f.plane, matrix: planeMatrix(f.plane), entities, visible: f.visible,
           });
           break;
         }

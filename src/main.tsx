@@ -6,6 +6,7 @@ import { Viewport } from './viewport/Viewport';
 import { App } from './ui/App';
 import { installKeyboard } from './ui/keyboard';
 import { runCmd } from './ui/commands';
+import * as actions from './core/actions';
 import { startPreciseSync } from './kernel/client';
 
 const viewport = new Viewport();
@@ -34,4 +35,4 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator && location.protocol ==
 }
 
 // handy for debugging and for automation
-(window as any).kimatic = { store, viewport, run: runCmd };
+(window as any).kimatic = { store, viewport, run: runCmd, actions };

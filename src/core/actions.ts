@@ -4,13 +4,15 @@ import type { PickState, SketchTool } from './store';
 import { bodyBounds, featureOf, trsMatrix, type EvalBody } from './evaluator';
 import { defaultParams, shapeById } from './primitives';
 import { nextColor } from './materials';
-import { STANDARD_PLANES, entityOutline } from './sketch';
-import { evalExpr } from './expr';
+import { STANDARD_PLANES, entityOutline, entityPoints } from './sketch';
+import { ORIGIN, liveConstraints, measure, paramCount, refCircle, refLine, refPoint, solveSketch, withValues } from './constraints';
+import { evalExpr, usesNames } from './expr';
 import { arrangeOnBed, layFlatQuaternion } from './printing';
 import {
   identityTRS, isCreating, uid,
   type Appearance, type BodyOp, type DesignDoc, type ExtrudeFeature, type Feature, type MoveFeature,
   type PatternFeature, type MirrorFeature, type PlaneDef, type RevolveFeature, type SketchEntity, type SketchFeature, type TRS, type Vec3,
+  type ConstraintType, type SketchConstraint, type SkRef,
 } from './types';
 
 /** Hooks the viewport registers so actions can drive the camera. */
@@ -510,7 +512,46 @@ export function editSketch(id: string) {
 }
 
 export function setSketchTool(tool: SketchTool) {
-  store.set({ sketchTool: tool, sketchSelection: [] });
+  store.set({ sketchTool: tool, sketchSelection: [], sketchConstraint: null });
+}
+
+const CONSTRAINT_LABEL: Partial<Record<ConstraintType, string>> = {
+  coincident: 'Coincident', horizontal: 'Horizontal', vertical: 'Vertical', parallel: 'Parallel', perpendicular: 'Perpendicular',
+  equal: 'Equal', tangent: 'Tangent', concentric: 'Concentric', midpoint: 'Midpoint', fix: 'Lock', symmetric: 'Symmetric',
+};
+
+/** Constraint button: applies straight away to a fitting selection, otherwise waits for picks. */
+export function constraintTool(type: ConstraintType) {
+  const s = activeSketch();
+  if (!s) return;
+  const refs = store.state.sketchSelection.map(parseRefKey).filter((r): r is SkRef => !!r);
+  if (refs.length) {
+    const cs = constraintsFor(type, refs, s);
+    if (Array.isArray(cs)) { if (addConstraints(cs, CONSTRAINT_LABEL[type])) store.set({ sketchSelection: [] }); return; }
+  }
+  store.set({ sketchTool: 'constrain', sketchConstraint: type, sketchSelection: [] });
+}
+
+/** A pick while the Constrain tool is active. */
+export function pickForConstraint(ref: SkRef) {
+  const s = activeSketch();
+  const type = store.state.sketchConstraint;
+  if (!s || !type) return;
+  const key = refKey(ref);
+  const cur = store.state.sketchSelection;
+  if (cur.includes(key)) { store.set({ sketchSelection: cur.filter((k) => k !== key) }); return; }
+  const keys = [...cur, key];
+  const refs = keys.map(parseRefKey).filter((r): r is SkRef => !!r);
+  const cs = constraintsFor(type, refs, s);
+  if (cs === 'bad') {
+    store.toast(`${CONSTRAINT_LABEL[type]} needs ${constraintNeeds(type)}.`);
+    store.set({ sketchSelection: [] });
+  } else if (cs === null) {
+    store.set({ sketchSelection: keys });
+  } else {
+    addConstraints(cs, CONSTRAINT_LABEL[type]);
+    store.set({ sketchSelection: [] });
+  }
 }
 
 const sketchRecipe = (fn: (s: SketchFeature) => void) => (doc: DesignDoc) => {
@@ -518,22 +559,244 @@ const sketchRecipe = (fn: (s: SketchFeature) => void) => (doc: DesignDoc) => {
   if (s?.type === 'sketch') fn(s);
 };
 
-export function addSketchEntity(e: SketchEntity) {
-  store.commit('Draw', sketchRecipe((s) => { s.entities.push(e); }));
+export const activeSketch = (): SketchFeature | undefined => {
+  const f = featureOf(store.doc, store.state.sketchId);
+  return f?.type === 'sketch' ? f : undefined;
+};
+
+/** Re-solve a sketch after an edit, preferring to keep `keep` (entity id → parameter indices) as they are. */
+function resolve(s: SketchFeature, keep?: Record<string, number[] | 'all'>) {
+  if (!s.constraints?.length && !s.entities.some((e) => e.kind === 'arc')) return true;
+  const keys = new Set<string>();
+  for (const [id, ks] of Object.entries(keep ?? {})) {
+    const e = s.entities.find((x) => x.id === id);
+    if (!e) continue;
+    for (const k of ks === 'all' ? Array.from({ length: paramCount(e) }, (_, i) => i) : ks) keys.add(`${id}:${k}`);
+  }
+  const r = solveSketch(s.entities, withValues(s.constraints ?? [], store.state.result.vars ?? {}), { keep: keys });
+  if (r.ok) s.entities = r.entities;
+  return r.ok;
+}
+
+export function addSketchEntity(e: SketchEntity, constraints: SketchConstraint[] = []) {
+  store.commit('Draw', sketchRecipe((s) => {
+    s.entities.push(e);
+    if (constraints.length) {
+      s.constraints = [...(s.constraints ?? []), ...constraints];
+      resolve(s, { [e.id]: 'all' });
+    }
+  }));
 }
 
 export function updateSketchEntity(id: string, patch: Partial<SketchEntity>, live = false) {
   const r = sketchRecipe((s) => {
     const e = s.entities.find((x) => x.id === id);
-    if (e) Object.assign(e, patch);
+    if (!e) return;
+    Object.assign(e, patch);
+    resolve(s, { [id]: 'all' });
   });
   if (live) store.transient(r);
   else store.commit('Edit sketch', r);
 }
 
-export function deleteSketchEntities(ids = store.state.sketchSelection) {
-  if (!ids.length) return;
-  store.commit('Delete sketch lines', sketchRecipe((s) => { s.entities = s.entities.filter((e) => !ids.includes(e.id)); }), { sketchSelection: [] });
+/** Replace a sketch's entities wholesale (live while dragging). */
+export function setSketchEntities(entities: SketchEntity[]) {
+  store.transient(sketchRecipe((s) => { s.entities = entities; }));
+}
+
+/** Selected sketch items are stored as keys: `id` (whole shape), `id.p2` (a point), `id.s0` (a segment), `#cid` (a constraint). */
+export const refKey = (r: SkRef) => (r.p !== undefined ? `${r.e}.p${r.p}` : r.s !== undefined ? `${r.e}.s${r.s}` : r.e);
+export function parseRefKey(k: string): SkRef | null {
+  if (k.startsWith('#')) return null;
+  const m = /^(.+?)\.([ps])(\d+)$/.exec(k);
+  if (!m) return { e: k };
+  return m[2] === 'p' ? { e: m[1], p: Number(m[3]) } : { e: m[1], s: Number(m[3]) };
+}
+
+export function deleteSketchEntities(keys = store.state.sketchSelection) {
+  if (!keys.length) return;
+  const cids = keys.filter((k) => k.startsWith('#')).map((k) => k.slice(1));
+  const ids = new Set(keys.map(parseRefKey).filter((r): r is SkRef => !!r && r.e !== ORIGIN).map((r) => r.e));
+  store.commit(ids.size ? 'Delete sketch lines' : 'Delete constraint', sketchRecipe((s) => {
+    s.entities = s.entities.filter((e) => !ids.has(e.id));
+    s.constraints = liveConstraints(s.entities, (s.constraints ?? []).filter((c) => !cids.includes(c.id)));
+  }), { sketchSelection: [] });
+}
+
+/** Turn the selected shapes into construction geometry (or back). */
+export function toggleConstruction(keys = store.state.sketchSelection) {
+  const ids = new Set(keys.map(parseRefKey).filter((r): r is SkRef => !!r).map((r) => r.e));
+  const s = activeSketch();
+  if (!s || !ids.size) { store.toast('Select sketch shapes first, then press X to make them construction lines.'); return; }
+  const on = !s.entities.filter((e) => ids.has(e.id)).every((e) => e.construction);
+  store.commit(on ? 'Make construction' : 'Make normal', sketchRecipe((sk) => {
+    for (const e of sk.entities) if (ids.has(e.id)) e.construction = on || undefined;
+  }));
+}
+
+const NEEDS: Record<string, string> = {
+  coincident: 'two points (or a point and a line or circle)',
+  horizontal: 'a line, or two points',
+  vertical: 'a line, or two points',
+  parallel: 'two lines',
+  perpendicular: 'two lines',
+  equal: 'two lines or two circles',
+  tangent: 'a line and a circle, or two circles',
+  concentric: 'two circles or arcs',
+  midpoint: 'a point and a line',
+  fix: 'points or shapes to lock',
+  symmetric: 'two points and a line to mirror across',
+};
+export const constraintNeeds = (t: ConstraintType) => NEEDS[t] ?? '';
+
+/** Points that make up a referenced segment or shape (for locking). */
+function pointsOf(e: SketchEntity, r: SkRef): number[] {
+  if (r.p !== undefined) return [r.p];
+  const n = entityPoints(e).length;
+  if (r.s !== undefined) {
+    if (e.kind === 'polyline') return [r.s, (r.s + 1) % e.points.length];
+    if (e.kind === 'rect') return [r.s, (r.s + 1) % 4];
+    if (e.kind === 'polygon') return [1 + r.s, 1 + ((r.s + 1) % e.sides)];
+    return [0, 1];
+  }
+  if (e.kind === 'rect') return [0, 2];
+  if (e.kind === 'polygon') return [0, 1];
+  return Array.from({ length: n }, (_, i) => i);
+}
+
+/**
+ * Build constraints of `type` from picked references. Returns null when the picks don't
+ * fit yet (more picks may still make it work) and 'bad' when they never will.
+ */
+export function constraintsFor(type: ConstraintType, refs: SkRef[], s: SketchFeature): SketchConstraint[] | null | 'bad' {
+  const ents = new Map(s.entities.map((e) => [e.id, e]));
+  const kind = (r: SkRef): string => (refPoint(ents, r) ? 'point' : refLine(ents, r) ? 'line' : refCircle(ents, r) ? 'circle' : 'other');
+  const ks = refs.map(kind);
+  const mk = (t: ConstraintType, rs: SkRef[], extra: Partial<SketchConstraint> = {}): SketchConstraint => ({ id: uid('c'), type: t, refs: rs, ...extra });
+  const has = (k: string) => ks.indexOf(k);
+  if (ks.includes('other')) return 'bad';
+  switch (type) {
+    case 'coincident': {
+      if (refs.length < 2) return ks[0] === 'point' || ks[0] === 'line' || ks[0] === 'circle' ? null : 'bad';
+      const pi = has('point');
+      if (pi < 0) return 'bad';
+      const other = refs[1 - pi], ok = ks[1 - pi];
+      return ok === 'point' ? [mk('coincident', refs)] : [mk('onCurve', [refs[pi], other])];
+    }
+    case 'horizontal':
+    case 'vertical':
+      if (ks[0] === 'line') return refs.map((r) => mk(type, [r]));
+      if (ks[0] !== 'point') return 'bad';
+      if (refs.length < 2) return null;
+      return ks[1] === 'point' ? [mk(type, refs)] : 'bad';
+    case 'parallel':
+    case 'perpendicular':
+      if (ks[0] !== 'line') return 'bad';
+      if (refs.length < 2) return null;
+      return ks[1] === 'line' ? [mk(type, refs)] : 'bad';
+    case 'equal':
+      if (ks[0] !== 'line' && ks[0] !== 'circle') return 'bad';
+      if (refs.length < 2) return null;
+      return ks[1] === ks[0] ? [mk('equal', refs)] : 'bad';
+    case 'concentric':
+      if (ks[0] !== 'circle') return 'bad';
+      if (refs.length < 2) return null;
+      return ks[1] === 'circle' ? [mk('concentric', refs)] : 'bad';
+    case 'tangent': {
+      if (ks[0] !== 'line' && ks[0] !== 'circle') return 'bad';
+      if (refs.length < 2) return null;
+      if (ks[0] === 'line' && ks[1] === 'line') return 'bad';
+      if (ks[0] === 'circle' && ks[1] === 'circle') {
+        const a = refCircle(ents, refs[0])!, b = refCircle(ents, refs[1])!;
+        const d = Math.hypot(a.c[0] - b.c[0], a.c[1] - b.c[1]);
+        return [mk('tangent', refs, { inner: d < Math.max(a.r, b.r) })];
+      }
+      return [mk('tangent', refs)];
+    }
+    case 'midpoint': {
+      if (refs.length < 2) return ks[0] === 'point' || ks[0] === 'line' ? null : 'bad';
+      const pi = has('point'), li = has('line');
+      return pi >= 0 && li >= 0 ? [mk('midpoint', [refs[pi], refs[li]])] : 'bad';
+    }
+    case 'fix': {
+      const out: SketchConstraint[] = [];
+      for (const r of refs) {
+        if (r.e === ORIGIN) continue;
+        const e = ents.get(r.e)!;
+        for (const p of pointsOf(e, r)) out.push(mk('fix', [{ e: r.e, p }], { at: [...entityPoints(e)[p]] as [number, number] }));
+      }
+      return out.length ? out : 'bad';
+    }
+    case 'symmetric': {
+      if (refs.length < 3) return ks.every((k) => k === 'point' || k === 'line') ? null : 'bad';
+      const pts = refs.filter((_, i) => ks[i] === 'point'), lines = refs.filter((_, i) => ks[i] === 'line');
+      return pts.length === 2 && lines.length === 1 ? [mk('symmetric', [pts[0], pts[1], lines[0]])] : 'bad';
+    }
+  }
+  return 'bad';
+}
+
+/** Add constraints to the active sketch. Refuses (with a message) if they'd fight existing ones. */
+export function addConstraints(cs: SketchConstraint[], label = 'Constrain') {
+  const s = activeSketch();
+  if (!s || !cs.length) return false;
+  const all = [...(s.constraints ?? []), ...cs];
+  const r = solveSketch(s.entities, withValues(all, store.state.result.vars ?? {}));
+  if (!r.ok) {
+    store.toast('That would fight the sketch’s other constraints, so it wasn’t added. Remove a constraint or dimension first.', 'error');
+    return false;
+  }
+  store.commit(label, sketchRecipe((sk) => { sk.constraints = all; sk.entities = r.entities; }));
+  return true;
+}
+
+/** Add a driving dimension at its current measurement; returns its id. */
+export function addDimension(type: ConstraintType, refs: SkRef[], offset?: [number, number]): string | null {
+  const s = activeSketch();
+  if (!s) return null;
+  const ents = new Map(s.entities.map((e) => [e.id, e]));
+  const c: SketchConstraint = { id: uid('d'), type, refs, offset };
+  const v = measure(ents, c);
+  if (v === null || !Number.isFinite(v)) return null;
+  c.value = Math.round(v * 1000) / 1000;
+  return addConstraints([c], 'Dimension') ? c.id : null;
+}
+
+/** Set a dimension to a number or an expression like `width / 2`. */
+export function setDimension(id: string, text: string) {
+  const s = activeSketch();
+  const c = s?.constraints?.find((x) => x.id === id);
+  if (!s || !c) return false;
+  const vars = store.state.result.vars ?? {};
+  let value: number;
+  try { value = evalExpr(text, vars); } catch (e: any) { store.toast(`Can’t use “${text}”: ${e.message}`, 'error'); return false; }
+  if (c.type !== 'angle' && value < 0) { store.toast('Sizes can’t be negative.', 'error'); return false; }
+  const expr = usesNames(text) ? text.replace(/^=/, '').trim() : undefined;
+  const next = s.constraints!.map((x) => (x.id === id ? { ...x, value, expr } : x));
+  const r = solveSketch(s.entities, withValues(next, vars));
+  if (!r.ok) { store.toast('The sketch can’t reach that size with its other constraints.', 'error'); return false; }
+  store.commit('Change dimension', sketchRecipe((sk) => { sk.constraints = next; sk.entities = r.entities; }));
+  return true;
+}
+
+/** Set a dimension to a plain number (live while scrubbing). */
+export function setDimensionValue(id: string, value: number, live = false) {
+  const s = activeSketch();
+  if (!s?.constraints?.some((x) => x.id === id)) return false;
+  const next = s.constraints.map((x) => (x.id === id ? { ...x, value, expr: undefined } : x));
+  const r = solveSketch(s.entities, withValues(next, store.state.result.vars ?? {}));
+  if (!r.ok) { if (!live) store.toast('The sketch can’t reach that size with its other constraints.', 'error'); return false; }
+  const recipe = sketchRecipe((sk) => { sk.constraints = next; sk.entities = r.entities; });
+  if (live) store.transient(recipe);
+  else store.commit('Change dimension', recipe);
+  return true;
+}
+
+/** Move a dimension's label (live while dragging). */
+export function setDimensionOffset(id: string, offset: [number, number], live: boolean) {
+  const r = sketchRecipe((sk) => { const c = sk.constraints?.find((x) => x.id === id); if (c) c.offset = offset; });
+  if (live) store.transient(r);
+  else store.commit('Move dimension', r);
 }
 
 export function finishSketch() {

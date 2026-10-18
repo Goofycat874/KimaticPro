@@ -8,6 +8,7 @@ import * as A from '../core/actions';
 import { SHAPES } from '../core/primitives';
 import { SWATCHES } from '../core/materials';
 import { featureOf } from '../core/evaluator';
+import { analyzeSketch } from '../core/constraints';
 import { shapeThumbnail } from '../viewport/thumbnails';
 import { useClickOutside, useStore } from './hooks';
 import { cmd } from './commands';
@@ -69,7 +70,7 @@ function GizmoBar() {
 }
 
 function Banner() {
-  const s = useStore((s) => ({ mode: s.mode, sketchId: s.sketchId, doc: s.doc, measure: s.measure }));
+  const s = useStore((s) => ({ mode: s.mode, sketchId: s.sketchId, doc: s.doc, measure: s.measure, tool: s.sketchTool, constraint: s.sketchConstraint, picks: s.sketchSelection.length }));
   const [offset, setOffset] = useState(0);
   if (s.mode === 'pick-plane') {
     return (
@@ -89,10 +90,16 @@ function Banner() {
   if (s.mode === 'sketch') {
     const sk = featureOf(s.doc, s.sketchId);
     const n = sk?.type === 'sketch' ? sk.entities.length : 0;
+    const cs = sk?.type === 'sketch' ? sk.constraints ?? [] : [];
+    const info = sk?.type === 'sketch' && cs.length ? analyzeSketch(sk.entities, cs) : null;
+    const sub = s.tool === 'constrain' && s.constraint
+      ? `${cmd(`constrain.${s.constraint}`).label}: pick ${A.constraintNeeds(s.constraint)}${s.picks ? ` (${s.picks} picked)` : ''} · Esc to stop`
+      : s.tool === 'dimension' ? 'Click a line or circle (or two items), then click where the size goes'
+        : n ? `${n} shape${n > 1 ? 's' : ''} · draw closed shapes to make solids` : 'Pick a tool and start drawing';
     return (
       <div class="banner sketch">
         <span class="pill"><PenLine size={12} /> SKETCH</span>
-        <div><div class="b-title">{sk?.name}</div><div class="b-sub">{n ? `${n} shape${n > 1 ? 's' : ''} · draw closed shapes to make solids` : 'Pick a tool and start drawing'}</div></div>
+        <div><div class="b-title">{sk?.name}{info && <DofChip info={info} />}</div><div class="b-sub">{sub}</div></div>
         {n > 0 && <button class="btn small primary" onClick={() => A.extrude()}><ArrowUpFromLine size={14} /> Extrude</button>}
         <button class="btn small good" onClick={() => A.finishSketch()}><Check size={14} /> Finish</button>
       </div>
@@ -243,6 +250,15 @@ function MobileButtons() {
       <SlidersHorizontal size={19} /><span>{s.mode === 'sketch' ? 'Sketch' : s.sel || s.feat ? 'Edit' : 'Design'}</span>
     </button>
   </>;
+}
+
+function DofChip({ info }: { info: { ok: boolean; dof: number; failing: string[] } }) {
+  if (!info.ok || info.failing.length) {
+    return <span class="dof-chip bad" data-tip-title="Conflicting constraints" data-tip-desc="Some constraints or dimensions fight each other. Select the red ones and delete or change them.">Conflict</span>;
+  }
+  return info.dof === 0
+    ? <span class="dof-chip ok" data-tip-title="Fully constrained" data-tip-desc="Every point and size is pinned down by constraints and dimensions.">Fully constrained</span>
+    : <span class="dof-chip free" data-tip-title="Degrees of freedom" data-tip-desc="How many ways the sketch can still move or stretch. Add dimensions and constraints (and tie it to the origin) to bring it to zero.">{info.dof} free</span>;
 }
 
 export function ViewportOverlay() {

@@ -188,6 +188,7 @@ export class Viewport {
       size: () => this.size,
       invalidate: () => this.invalidate(),
       hud: this.hud,
+      labels: this.labels,
       accent: () => ACCENT,
     });
     this.scene.add(this.sketch.group);
@@ -284,7 +285,9 @@ export class Viewport {
       this.syncHighlight();
       if (!this.dragging) this.syncGizmo();
     }
-    if (s.result !== p.result || s.mode !== p.mode || s.sketchId !== p.sketchId || s.sketchSelection !== p.sketchSelection || s.selectedFeature !== p.selectedFeature) {
+    if (s.sketchTool !== p.sketchTool || s.sketchConstraint !== p.sketchConstraint) this.sketch.cancel();
+    if (s.result !== p.result || s.mode !== p.mode || s.sketchId !== p.sketchId || s.sketchSelection !== p.sketchSelection
+      || s.selectedFeature !== p.selectedFeature || s.showConstraints !== p.showConstraints) {
       this.sketch.rebuild();
     }
     if (s.mode !== p.mode) this.onModeChange(s.mode, p.mode);

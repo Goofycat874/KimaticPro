@@ -52,18 +52,54 @@ export interface PlaneDef {
   label: string;
 }
 
-export type SketchEntity =
-  | { id: string; kind: 'polyline'; points: Vec2[]; closed: boolean }
-  | { id: string; kind: 'rect'; x: number; y: number; w: number; h: number; radius?: number }
-  | { id: string; kind: 'circle'; cx: number; cy: number; r: number }
-  | { id: string; kind: 'polygon'; cx: number; cy: number; r: number; sides: number; rotation: number }
-  | { id: string; kind: 'spline'; points: Vec2[]; closed: boolean }
-  | { id: string; kind: 'slot'; x1: number; y1: number; x2: number; y2: number; r: number };
+interface EntityBase {
+  id: string;
+  /** Construction geometry guides other shapes but never becomes solid. */
+  construction?: boolean;
+}
+
+export type SketchEntity = EntityBase & (
+  | { kind: 'polyline'; points: Vec2[]; closed: boolean }
+  | { kind: 'rect'; x: number; y: number; w: number; h: number; radius?: number }
+  | { kind: 'circle'; cx: number; cy: number; r: number }
+  | { kind: 'polygon'; cx: number; cy: number; r: number; sides: number; rotation: number }
+  | { kind: 'spline'; points: Vec2[]; closed: boolean }
+  | { kind: 'slot'; x1: number; y1: number; x2: number; y2: number; r: number }
+  /** Counter-clockwise arc around (cx, cy) from (x1, y1) to (x2, y2); the radius comes from the start point. */
+  | { kind: 'arc'; cx: number; cy: number; x1: number; y1: number; x2: number; y2: number });
+
+/**
+ * A reference to part of a sketch: a key point (`p`), a straight segment (`s`), or the
+ * whole entity (circles and arcs). Entity `$o` is the sketch origin (point 0) and its
+ * axes (segment 0 = horizontal, 1 = vertical).
+ */
+export interface SkRef { e: string; p?: number; s?: number }
+
+export type ConstraintType =
+  | 'coincident' | 'horizontal' | 'vertical' | 'parallel' | 'perpendicular' | 'equal' | 'tangent'
+  | 'concentric' | 'midpoint' | 'onCurve' | 'symmetric' | 'fix'
+  | 'distance' | 'hdistance' | 'vdistance' | 'radius' | 'diameter' | 'angle';
+
+export interface SketchConstraint {
+  id: string;
+  type: ConstraintType;
+  refs: SkRef[];
+  /** Driving value for dimensions (mm or degrees), or the locked position for `fix`. */
+  value?: number;
+  at?: Vec2;
+  /** Expression that drives `value`, e.g. `width / 2`. */
+  expr?: string;
+  /** Tangent circles: touching from the inside. */
+  inner?: boolean;
+  /** Where the dimension label sits, as an offset from its natural spot (sketch units). */
+  offset?: Vec2;
+}
 
 export interface SketchFeature extends FeatureBase {
   type: 'sketch';
   plane: PlaneDef;
   entities: SketchEntity[];
+  constraints?: SketchConstraint[];
   visible: boolean;
 }
 

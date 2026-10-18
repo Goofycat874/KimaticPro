@@ -4,7 +4,8 @@ import { COMMANDS, runCmd } from './commands';
 
 /** Keys that only apply in sketch mode override model-mode shortcuts with the same letter. */
 const SKETCH_KEYS: Record<string, string> = {
-  v: 'sketch.select', l: 'sketch.line', r: 'sketch.rect', c: 'sketch.circle', p: 'sketch.polygon',
+  v: 'sketch.select', l: 'sketch.line', r: 'sketch.rect', c: 'sketch.circle', p: 'sketch.polygon', a: 'sketch.arc',
+  d: 'sketch.dimension', x: 'sketch.construction',
 };
 
 function combo(e: KeyboardEvent) {
@@ -36,7 +37,12 @@ export function installKeyboard(viewportKey: (e: KeyboardEvent) => boolean) {
 
     if (e.key === 'Escape') {
       if (s.contextMenu) store.set({ contextMenu: null });
-      else if (s.mode === 'sketch') runCmd('sketch.finish');
+      else if (s.mode === 'sketch') {
+        // step back gently: drop the tool, then the selection, then leave the sketch
+        if (s.sketchTool !== 'select') store.set({ sketchTool: 'select', sketchConstraint: null, sketchSelection: [] });
+        else if (s.sketchSelection.length) store.set({ sketchSelection: [] });
+        else runCmd('sketch.finish');
+      }
       else if (s.mode === 'pick') cancelPick();
       else if (s.mode !== 'model') store.set({ mode: 'model' });
       else select([]);

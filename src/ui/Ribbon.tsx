@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
-import { ChevronDown, Shapes, Check, ArrowUpFromLine, RotateCw, Trash2, AlignCenterHorizontal, Magnet, Blend, Spline } from 'lucide-preact';
+import { ChevronDown, Shapes, Check, ArrowUpFromLine, RotateCw, Trash2, AlignCenterHorizontal, Magnet } from 'lucide-preact';
 import { store } from '../core/store';
 import { align, addShape } from '../core/actions';
 import { SHAPES, type ShapeCategory } from '../core/primitives';
@@ -10,7 +10,7 @@ import { useClickOutside, useStore } from './hooks';
 import { cmd } from './commands';
 
 function Tool(props: { id: string; hero?: boolean; cls?: string; label?: string }) {
-  useStore((s) => [s.selection, s.mode, s.sketchTool, s.gizmo, s.section, s.showGhosts, s.canUndo, s.selectedFeature, s.projection, s.showGrid, s.sketchSelection]);
+  useStore((s) => [s.selection, s.mode, s.sketchTool, s.gizmo, s.section, s.showGhosts, s.canUndo, s.selectedFeature, s.projection, s.showGrid, s.sketchSelection, s.showConstraints, s.sketchConstraint]);
   const c = cmd(props.id);
   const Icon = c.icon;
   const enabled = !c.enabled || c.enabled();
@@ -19,6 +19,21 @@ function Tool(props: { id: string; hero?: boolean; cls?: string; label?: string 
       data-tip-title={c.label} data-tip-desc={c.desc} data-tip-key={c.key}>
       <span class="tool-icon"><Icon size={props.hero ? 19 : 21} /></span>
       <span class="tool-label">{props.label ?? c.label}</span>
+    </button>
+  );
+}
+
+const CONSTRAINT_TOOLS = ['coincident', 'horizontal', 'vertical', 'parallel', 'perpendicular', 'equal', 'tangent', 'concentric', 'midpoint', 'symmetric', 'fix']
+  .map((t) => `constrain.${t}`);
+
+/** Icon-only button for dense groups like constraints. */
+function MiniTool(props: { id: string }) {
+  useStore((s) => [s.sketchTool, s.sketchConstraint, s.sketchSelection]);
+  const c = cmd(props.id);
+  const Icon = c.icon;
+  return (
+    <button class={`mini-tool ${c.active?.() ? 'active' : ''}`} onClick={c.run} data-tip-title={c.label} data-tip-desc={c.desc} aria-label={c.label}>
+      <Icon size={16} />
     </button>
   );
 }
@@ -138,8 +153,15 @@ function SketchRibbon() {
         <Tool id="sketch.crect" />
         <Tool id="sketch.circle" />
         <Tool id="sketch.polygon" />
+        <Tool id="sketch.arc" />
         <Tool id="sketch.slot" />
         <Tool id="sketch.spline" />
+      </Group>
+      <Group label="Constrain">
+        <Tool id="sketch.dimension" />
+        <div class="mini-grid">
+          {CONSTRAINT_TOOLS.map((id) => <MiniTool key={id} id={id} />)}
+        </div>
       </Group>
       {s.tool === 'polygon' && (
         <Group label="Polygon">
@@ -155,9 +177,11 @@ function SketchRibbon() {
         <button class="tool" disabled={!s.sel} onClick={() => cmd('edit.delete').run()} data-tip-title="Delete" data-tip-desc="Delete the selected sketch shapes." data-tip-key="Delete">
           <span class="tool-icon"><Trash2 size={21} /></span><span class="tool-label">Delete</span>
         </button>
+        <Tool id="sketch.construction" />
         <button class={`tool ${s.snap ? 'active' : ''}`} onClick={() => store.set({ snap: s.snap ? 0 : 1 })} data-tip-title="Snap to grid" data-tip-desc="Points jump to the grid so sizes come out neat.">
           <span class="tool-icon"><Magnet size={21} /></span><span class="tool-label">Snap</span>
         </button>
+        <Tool id="sketch.showConstraints" label="Hide marks" />
       </Group>
       <Group label="Make 3D">
         <button class="tool good-tool" onClick={() => cmd('create.extrude').run()} data-tip-title="Extrude" data-tip-desc="Finish the sketch and pull it up into a solid.">
@@ -165,12 +189,6 @@ function SketchRibbon() {
         </button>
         <button class="tool good-tool" onClick={() => cmd('create.revolve').run()} data-tip-title="Revolve" data-tip-desc="Finish the sketch and spin it around its vertical axis.">
           <span class="tool-icon"><RotateCw size={21} /></span><span class="tool-label">Revolve</span>
-        </button>
-        <button class="tool good-tool" onClick={() => cmd('create.loft').run()} data-tip-title="Loft" data-tip-desc={cmd('create.loft').desc}>
-          <span class="tool-icon"><Blend size={21} /></span><span class="tool-label">Loft</span>
-        </button>
-        <button class="tool good-tool" onClick={() => cmd('create.sweep').run()} data-tip-title="Sweep" data-tip-desc={cmd('create.sweep').desc}>
-          <span class="tool-icon"><Spline size={21} /></span><span class="tool-label">Sweep</span>
         </button>
       </Group>
       <Group label="Exit">

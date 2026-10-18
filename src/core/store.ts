@@ -1,5 +1,5 @@
 import { evaluate, type EvalResult } from './evaluator';
-import type { DesignDoc } from './types';
+import type { ConstraintType, DesignDoc } from './types';
 
 export type Mode = 'model' | 'pick-plane' | 'sketch' | 'measure' | 'lay-flat' | 'pick';
 
@@ -13,7 +13,7 @@ export interface PickState {
   /** Editing an existing step instead of creating one. */
   featureId?: string;
 }
-export type SketchTool = 'select' | 'line' | 'rect' | 'crect' | 'circle' | 'polygon' | 'spline' | 'slot';
+export type SketchTool = 'select' | 'line' | 'rect' | 'crect' | 'circle' | 'polygon' | 'spline' | 'slot' | 'arc' | 'dimension' | 'constrain';
 export type DisplayMode = 'shaded' | 'edges' | 'wire' | 'xray';
 export type GizmoMode = 'translate' | 'rotate' | 'scale';
 
@@ -29,6 +29,9 @@ export interface AppState {
   sketchId: string | null;
   sketchTool: SketchTool;
   sketchSelection: string[];
+  /** The constraint the Constrain tool is applying. */
+  sketchConstraint: ConstraintType | null;
+  showConstraints: boolean;
   polygonSides: number;
   gizmo: GizmoMode;
   theme: 'dark' | 'light';
@@ -98,6 +101,8 @@ export class Store {
       sketchId: null,
       sketchTool: 'line',
       sketchSelection: [],
+      sketchConstraint: null,
+      showConstraints: true,
       polygonSides: 6,
       gizmo: 'translate',
       theme: (prefs.theme as any) ?? 'dark',

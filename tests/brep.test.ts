@@ -93,3 +93,42 @@ describe('precise-only features', () => {
     expect(g.getAttribute('position').count).toBeGreaterThan(8);
   });
 });
+
+describe('sketches with joined curves and constraints', () => {
+  const plane = { origin: [0, 0, 0] as [number, number, number], normal: [0, 1, 0] as [number, number, number], xDir: [1, 0, 0] as [number, number, number], label: 'g' };
+  // a D shape: three lines and a half circle, drawn as separate pieces
+  const dShape = (): Feature[] => [
+    { id: 's', type: 'sketch', name: 'S', plane, visible: true, entities: [
+      { id: 'l', kind: 'polyline', points: [[10, 10], [0, 10], [0, 0], [10, 0]], closed: false },
+      { id: 'a', kind: 'arc', cx: 10, cy: 5, x1: 10, y1: 0, x2: 10, y2: 10 },
+    ] },
+    { id: 'e', type: 'extrude', name: 'E', sketchId: 's', distance: 4, symmetric: false, roundEdges: 0, transform: identityTRS(), op: 'new', targets: [], appearance: app },
+  ];
+  it('extrudes lines + an arc exactly, matching the preview', () => {
+    const want = (100 + (Math.PI * 25) / 2) * 4;
+    const b = runFeatures(brepKernel, doc(dShape()));
+    expect(b.errors).toEqual({});
+    expect(b.bodies[0].solid.kind).toBe('brep');
+    expect(Math.abs(bvol(b.bodies[0]) - want)).toBeLessThan(1e-3);
+    const m = runFeatures(meshKernel, doc(dShape()));
+    expect(Math.abs(computeVolume(m.bodies[0].solid, m.bodies[0].matrix) - want) / want).toBeLessThan(0.01);
+  });
+
+  it('re-solves a sketch when a parameter drives a dimension', () => {
+    const fs = dShape();
+    (fs[0] as any).constraints = [
+      { id: 'h1', type: 'horizontal', refs: [{ e: 'l', s: 0 }] },
+      { id: 'v1', type: 'vertical', refs: [{ e: 'l', s: 1 }] },
+      { id: 'h2', type: 'horizontal', refs: [{ e: 'l', s: 2 }] },
+      { id: 'j1', type: 'coincident', refs: [{ e: 'a', p: 1 }, { e: 'l', p: 3 }] },
+      { id: 'j2', type: 'coincident', refs: [{ e: 'a', p: 2 }, { e: 'l', p: 0 }] },
+      { id: 'w', type: 'distance', refs: [{ e: 'l', s: 1 }], value: 10, expr: 'h' },
+    ];
+    const d = { ...doc(fs), params: [{ name: 'h', expr: '20' }] };
+    const b = runFeatures(brepKernel, d);
+    expect(b.errors).toEqual({});
+    const bb = brepKernel.bounds(b.bodies[0]);
+    // the straight side is now 20 long, and the arc grew to match (radius 10)
+    expect(Math.round((bb.max.z - bb.min.z) * 1000) / 1000).toBe(20);
+  });
+});

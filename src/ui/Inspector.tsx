@@ -14,7 +14,8 @@ import { metricPitch } from '../core/hardware';
 import { evalExpr } from '../core/expr';
 import { MATERIALS, SWATCHES, materialById } from '../core/materials';
 import { computeArea, computeVolume, triangleCount } from '../core/geometry';
-import type { BodyOp, Feature, SketchEntity, TRS, Vec3 } from '../core/types';
+import type { BodyOp, Feature, SketchConstraint, SketchEntity, TRS, Vec3 } from '../core/types';
+import { analyzeSketch, isDimension } from '../core/constraints';
 import { useStore } from './hooks';
 import { Field, NumberField, Segmented, Toggle, Vec3Field } from './controls';
 import { shapeThumbnail } from '../viewport/thumbnails';
@@ -591,53 +592,120 @@ function EntityEditor({ e }: { e: SketchEntity }) {
         onChange={(v, live) => set({ [key]: opts.scale ? v / opts.scale : v } as any, live)} />
     </Field>
   );
+  const construction = (
+    <Field label="Construction" tip="Dashed guide geometry: helps you place things but never becomes solid. Shortcut: X">
+      <Toggle value={!!e.construction} onChange={() => A.toggleConstruction([e.id])} />
+    </Field>
+  );
   switch (e.kind) {
-    case 'rect': return <>{n('X', e.x, 'x')}{n('Y', e.y, 'y')}{n('Width', e.w, 'w', { min: 0.01 })}{n('Height', e.h, 'h', { min: 0.01 })}{n('Corner radius', e.radius ?? 0, 'radius', { min: 0 })}</>;
-    case 'circle': return <>{n('Centre X', e.cx, 'cx')}{n('Centre Y', e.cy, 'cy')}{n('Diameter', e.r * 2, 'r', { min: 0.01, scale: 2 })}</>;
-    case 'polygon': return <>{n('Centre X', e.cx, 'cx')}{n('Centre Y', e.cy, 'cy')}{n('Radius', e.r, 'r', { min: 0.01 })}{n('Sides', e.sides, 'sides', { min: 3, unit: '', integer: true })}{n('Rotation', e.rotation, 'rotation', { unit: '°' })}</>;
-    case 'slot': return <>{n('Width', e.r * 2, 'r', { min: 0.01, scale: 2 })}</>;
+    case 'rect': return <>{n('X', e.x, 'x')}{n('Y', e.y, 'y')}{n('Width', e.w, 'w', { min: 0.01 })}{n('Height', e.h, 'h', { min: 0.01 })}{n('Corner radius', e.radius ?? 0, 'radius', { min: 0 })}{construction}</>;
+    case 'circle': return <>{n('Centre X', e.cx, 'cx')}{n('Centre Y', e.cy, 'cy')}{n('Diameter', e.r * 2, 'r', { min: 0.01, scale: 2 })}{construction}</>;
+    case 'polygon': return <>{n('Centre X', e.cx, 'cx')}{n('Centre Y', e.cy, 'cy')}{n('Radius', e.r, 'r', { min: 0.01 })}{n('Sides', e.sides, 'sides', { min: 3, unit: '', integer: true })}{n('Rotation', e.rotation, 'rotation', { unit: '°' })}{construction}</>;
+    case 'slot': return <>{n('Width', e.r * 2, 'r', { min: 0.01, scale: 2 })}{construction}</>;
+    case 'arc': {
+      const r = Math.hypot(e.x1 - e.cx, e.y1 - e.cy);
+      const scale = (v: number, live: boolean) => {
+        const k = v / (r || 1);
+        set({ x1: e.cx + (e.x1 - e.cx) * k, y1: e.cy + (e.y1 - e.cy) * k, x2: e.cx + (e.x2 - e.cx) * k, y2: e.cy + (e.y2 - e.cy) * k } as any, live);
+      };
+      return <>
+        {n('Centre X', e.cx, 'cx')}{n('Centre Y', e.cy, 'cy')}
+        <Field label="Radius"><NumberField value={r} unit="mm" min={0.01} label="↔" onCommit={c} onChange={scale} /></Field>
+        {construction}
+      </>;
+    }
     case 'polyline':
     case 'spline':
       return <>
         <Field label="Points"><span>{e.points.length}</span></Field>
         <Field label="Closed"><Toggle value={e.closed} onChange={(v) => set({ closed: v } as any, false)} /></Field>
+        {construction}
       </>;
   }
 }
 
 const TOOL_HELP: Record<string, string> = {
-  select: 'Click a shape to select it, drag to move it. Edit exact sizes below.',
-  line: 'Click to place points. Click the first point again to close the shape. Double-click or Enter to stop.',
-  rect: 'Click one corner, then the opposite corner. Type 40,20 then Enter for an exact size.',
+  select: 'Click a point, line or shape to select it; drag to move it — constraints keep everything connected. Drag empty space to box-select.',
+  line: 'Click to place points. Click the first point again to close the shape. Double-click or Enter to stop. Snapping onto points joins them; level lines become Horizontal automatically.',
+  rect: 'Click one corner, then the opposite corner. Type 40,20 then Enter for an exact size — it becomes dimensions you can change later.',
   crect: 'Click the centre, then a corner. Type 40,20 for an exact size.',
   circle: 'Click the centre, then the edge. Type a diameter then Enter.',
   polygon: 'Click the centre, then a corner. Change the number of sides in the ribbon.',
   slot: 'Click the first centre, the second centre, then move out to set the width.',
   spline: 'Click to add smooth curve points. Click the first point to close it.',
+  arc: 'Click where the arc starts, then where it ends, then move to bend it and click. Lines and arcs that meet end to end make closed shapes.',
+  dimension: 'Click a line (length), circle (diameter), arc (radius), or two items (distance or angle). Click where the label goes, then type the size — numbers or parameters like width / 2.',
+  constrain: 'Click the items to constrain. Press Esc when you’re done.',
 };
+
+const C_NAME: Record<string, string> = {
+  coincident: 'Coincident', horizontal: 'Horizontal', vertical: 'Vertical', parallel: 'Parallel', perpendicular: 'Perpendicular', equal: 'Equal',
+  tangent: 'Tangent', concentric: 'Concentric', midpoint: 'Midpoint', onCurve: 'Point on curve', symmetric: 'Symmetric', fix: 'Lock',
+  distance: 'Distance', hdistance: 'Horizontal distance', vdistance: 'Vertical distance', radius: 'Radius', diameter: 'Diameter', angle: 'Angle',
+};
+
+function DimensionField({ c }: { c: SketchConstraint }) {
+  return (
+    <NumberField value={c.value ?? 0} unit={c.type === 'angle' ? '°' : 'mm'} min={c.type === 'angle' ? -360 : 0} label="↔" expr={c.expr}
+      onChange={(v, live) => A.setDimensionValue(c.id, v, live)} onCommit={commit('Change dimension')}
+      onExpr={(x) => (x === null ? undefined : A.setDimension(c.id, x))} />
+  );
+}
 
 function SketchInspector() {
   const s = useStore((s) => ({ tool: s.sketchTool, sel: s.sketchSelection, sketchId: s.sketchId, doc: s.doc }));
   const sk = featureOf(s.doc, s.sketchId);
   if (sk?.type !== 'sketch') return null;
-  const selected = sk.entities.filter((e) => s.sel.includes(e.id));
+  const cs = sk.constraints ?? [];
+  const refs = s.sel.map(A.parseRefKey).filter((r): r is NonNullable<typeof r> => !!r);
+  const selectedIds = [...new Set(refs.map((r) => r.e))];
+  const selected = sk.entities.filter((e) => selectedIds.includes(e.id));
+  const selCons = cs.filter((c) => s.sel.includes(`#${c.id}`));
+  const dims = cs.filter((c) => isDimension(c.type));
+  const info = cs.length ? analyzeSketch(sk.entities, cs) : null;
   return <>
     <Head color="var(--good)" icon={PenLine} title={sk.name} sub={`Sketching on ${sk.plane.label}`} onRename={(v) => A.renameFeature(sk.id, v)} />
     <div class="insp-section"><div class="hint-box"><Lightbulb size={16} /><span>{TOOL_HELP[s.tool]}</span></div></div>
+    {selCons.length > 0 && <Section title={selCons.length === 1 ? C_NAME[selCons[0].type] : `${selCons.length} constraints`}>
+      {selCons.length === 1 && isDimension(selCons[0].type) && <Field label="Value" tip="Type a number or a formula using parameters, like width / 2.">
+        <DimensionField c={selCons[0]} />
+      </Field>}
+      <div class="row-actions"><button class="btn small" onClick={() => A.deleteSketchEntities()}><Trash2 size={13} /> Delete</button></div>
+    </Section>}
     {selected.length === 1 && <Section title={`Selected ${selected[0].kind}`}><EntityEditor e={selected[0]} /></Section>}
-    {selected.length > 1 && <Section title="Selection"><span>{selected.length} shapes selected</span></Section>}
+    {selected.length > 1 && <Section title="Selection">
+      <span>{selected.length} shapes selected</span>
+      <div class="row-actions"><button class="btn small" onClick={() => A.toggleConstruction()}>Toggle construction</button></div>
+    </Section>}
+    {dims.length > 0 && <Section title={`Dimensions (${dims.length})`} right={info && <span class={`dof-chip ${!info.ok ? 'bad' : info.dof ? 'free' : 'ok'}`}>{!info.ok ? 'Conflict' : info.dof ? `${info.dof} free` : 'Fully constrained'}</span>}>
+      {dims.map((c) => (
+        <Field key={c.id} label={C_NAME[c.type]}>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <DimensionField c={c} />
+          </div>
+        </Field>
+      ))}
+    </Section>}
+    {cs.length > dims.length && <Section title={`Constraints (${cs.length - dims.length})`}>
+      <div class="chips">
+        {cs.filter((c) => !isDimension(c.type)).map((c) => (
+          <button key={c.id} class={`chip ${s.sel.includes(`#${c.id}`) ? 'on' : ''} ${info?.failing.includes(c.id) ? 'bad' : ''}`}
+            onClick={() => store.set({ sketchSelection: [`#${c.id}`], sketchTool: 'select' })}>{C_NAME[c.type]}</button>
+        ))}
+      </div>
+    </Section>}
     <Section title="Turn it into 3D">
       <div class="row-actions">
         <button class="btn small primary" onClick={() => A.extrude()}><ArrowUpFromLine size={13} /> Extrude</button>
         <button class="btn small" onClick={() => A.revolve()}><RotateCw size={13} /> Revolve</button>
       </div>
-      <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 8, lineHeight: 1.5 }}>Closed shapes fill in blue — those become solid. Shapes inside other shapes become holes.</div>
+      <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 8, lineHeight: 1.5 }}>Closed shapes fill in blue — those become solid. Shapes inside other shapes become holes. Dashed construction lines never do.</div>
     </Section>
     <Section title={`Shapes in sketch (${sk.entities.length})`}>
       {sk.entities.length === 0 && <span style={{ color: 'var(--text-3)' }}>Nothing drawn yet.</span>}
       <div class="chips">
         {sk.entities.map((e, i) => (
-          <button key={e.id} class={`chip ${s.sel.includes(e.id) ? 'on' : ''}`} onClick={() => store.set({ sketchSelection: [e.id], sketchTool: 'select' })}>{e.kind} {i + 1}</button>
+          <button key={e.id} class={`chip ${selectedIds.includes(e.id) ? 'on' : ''}`} onClick={() => store.set({ sketchSelection: [e.id], sketchTool: 'select' })}>{e.construction ? '┄ ' : ''}{e.kind} {i + 1}</button>
         ))}
       </div>
     </Section>

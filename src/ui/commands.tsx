@@ -6,7 +6,10 @@ import {
   Keyboard, Sun, Moon, GraduationCap, Grid3x3, Layers2, Spline, RectangleHorizontal, Circle, Hexagon, MousePointer2,
   Check, Upload, ScanEye, Crosshair, Diamond, SquareDashed, Pill, Ghost, Printer, BedDouble, PanelBottom, LayoutGrid,
   TriangleAlert, ClipboardCheck, Blend, SquareSplitVertical, Variable, SquareRoundCorner, PackageOpen, Triangle, FileBox,
+  DraftingCompass, RulerDimensionLine, CircleDot, MoveHorizontal, MoveVertical, Pause, TriangleRight, Equal, Target,
+  GitCommitHorizontal, Lock, EyeOff,
 } from 'lucide-preact';
+import type { ConstraintType } from '../core/types';
 import { store } from '../core/store';
 import * as A from '../core/actions';
 import { exportAs, pickFile, saveProject } from '../core/io';
@@ -124,6 +127,27 @@ export const COMMANDS: Command[] = [
   { id: 'sketch.polygon', label: 'Polygon', group: 'Sketch', icon: Hexagon, desc: 'A regular polygon — set the number of sides on the right.', key: 'P', run: () => A.setSketchTool('polygon'), active: () => store.state.sketchTool === 'polygon' },
   { id: 'sketch.slot', label: 'Slot', group: 'Sketch', icon: Pill, desc: 'Click two centres, then set the width.', run: () => A.setSketchTool('slot'), active: () => store.state.sketchTool === 'slot' },
   { id: 'sketch.spline', label: 'Spline', group: 'Sketch', icon: Spline, desc: 'Smooth curve through your clicks. Click the first point to close it.', run: () => A.setSketchTool('spline'), active: () => store.state.sketchTool === 'spline' },
+  { id: 'sketch.arc', label: 'Arc', group: 'Sketch', icon: DraftingCompass, desc: 'Click the start, then the end, then move to bend it. Snaps onto line ends so shapes join up.', key: 'A', run: () => A.setSketchTool('arc'), active: () => store.state.sketchTool === 'arc', keywords: 'curve 3 point' },
+  { id: 'sketch.dimension', label: 'Dimension', group: 'Sketch', icon: RulerDimensionLine, desc: 'Click a line, circle, or two items, then place the size and type the value you want. Sizes can use parameters like width / 2.', key: 'D', run: () => A.setSketchTool('dimension'), active: () => store.state.sketchTool === 'dimension', keywords: 'size measure driving constraint' },
+  { id: 'sketch.construction', label: 'Construction', group: 'Sketch', icon: SquareDashed, desc: 'Turn selected shapes into dashed guide lines that never become solid.', key: 'X', run: () => A.toggleConstruction(), enabled: () => store.state.sketchSelection.length > 0, keywords: 'reference guide centerline' },
+  { id: 'sketch.showConstraints', label: 'Show constraints', group: 'Sketch', icon: EyeOff, desc: 'Show or hide dimension labels and constraint markers.', run: () => store.set({ showConstraints: !store.state.showConstraints }), active: () => !store.state.showConstraints },
+  ...([
+    ['coincident', 'Coincident', CircleDot, 'Join two points, or put a point on a line or circle.', 'join snap'],
+    ['horizontal', 'Horizontal', MoveHorizontal, 'Make a line (or two points) level.', 'level flat'],
+    ['vertical', 'Vertical', MoveVertical, 'Make a line (or two points) straight up and down.', 'upright plumb'],
+    ['parallel', 'Parallel', Pause, 'Make two lines run side by side.', ''],
+    ['perpendicular', 'Perpendicular', TriangleRight, 'Make two lines meet at a right angle.', 'square 90'],
+    ['equal', 'Equal', Equal, 'Make two lines the same length, or two circles the same size.', 'same'],
+    ['tangent', 'Tangent', Spline, 'Make a line just touch a circle or arc (or two circles touch).', 'touch smooth'],
+    ['concentric', 'Concentric', Target, 'Give two circles or arcs the same centre.', 'centre'],
+    ['midpoint', 'Midpoint', GitCommitHorizontal, 'Put a point in the middle of a line.', 'centre half'],
+    ['symmetric', 'Symmetric', FlipHorizontal2, 'Mirror two points across a line (or an axis).', 'mirror'],
+    ['fix', 'Lock', Lock, 'Pin points or shapes where they are.', 'fix anchor ground'],
+  ] as [ConstraintType, string, any, string, string][]).map(([t, label, icon, desc, kw]): Command => ({
+    id: `constrain.${t}`, label, group: 'Sketch', icon, desc: `${desc} Select first, or click the tool and pick.`,
+    run: () => A.constraintTool(t), active: () => store.state.sketchTool === 'constrain' && store.state.sketchConstraint === t,
+    keywords: `constraint ${kw}`,
+  })),
   { id: 'sketch.finish', label: 'Finish sketch', group: 'Sketch', icon: Check, desc: 'Leave the sketch. Then Extrude or Revolve it.', key: 'Enter', run: () => A.finishSketch() },
 ];
 
