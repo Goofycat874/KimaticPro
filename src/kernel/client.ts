@@ -23,6 +23,9 @@ class KernelClient {
   private pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
   private listeners = new Set<Listener>();
   private booting: Promise<void> | null = null;
+  /** Failures since the engine last did real work, and when automatic retries may try again. */
+  private failures = 0;
+  private retryAt = 0;
 
   onStatus(fn: Listener) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
 
@@ -33,32 +36,61 @@ class KernelClient {
     for (const l of this.listeners) l(s, info);
   }
 
-  start() {
+  /**
+   * Start the worker if it isn't running. After a failure the next call starts a fresh one;
+   * automatic callers (`force` off) wait a little longer after each repeated failure so a
+   * browser that can't run the engine isn't asked to reload it on every edit.
+   */
+  start(force = false) {
     if (this.booting) return this.booting;
+    if (!force && Date.now() < this.retryAt) return Promise.resolve();
     if (typeof Worker === 'undefined') { this.setStatus('error', { error: 'Web Workers are not available here.' }); return Promise.resolve(); }
     this.setStatus('loading');
+    let worker: Worker;
     try {
-      this.worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
+      worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
     } catch (e: any) {
+      this.noteFailure();
       this.setStatus('error', { error: e?.message ?? 'Could not start the geometry engine.' });
       return Promise.resolve();
     }
-    this.worker.onmessage = (e: MessageEvent<Response>) => {
+    this.worker = worker;
+    worker.onmessage = (e: MessageEvent<Response>) => {
       const p = this.pending.get(e.data.id);
       if (!p) return;
       this.pending.delete(e.data.id);
       if (e.data.ok) p.resolve(e.data.data);
       else p.reject(new Error(e.data.error));
     };
-    this.worker.onerror = (e) => {
-      this.setStatus('error', { error: e.message || 'The geometry engine failed to load.' });
-      for (const p of this.pending.values()) p.reject(new Error('engine failed'));
-      this.pending.clear();
+    worker.onerror = (e) => {
+      e.preventDefault?.();
+      this.fail(worker, e.message || 'The geometry engine stopped unexpectedly.');
     };
     this.booting = this.call({ type: 'init' })
-      .then(() => this.setStatus('ready'))
-      .catch((e) => this.setStatus('error', { error: e.message }));
+      .then(() => { if (this.worker === worker) this.setStatus('ready'); })
+      .catch((e) => this.fail(worker, e.message));
     return this.booting;
+  }
+
+  private noteFailure() {
+    this.failures++;
+    // the first retry is immediate; after that wait 2 s, 4 s, 8 s … up to 30 s
+    this.retryAt = this.failures > 1 ? Date.now() + Math.min(30_000, 1000 * 2 ** (this.failures - 1)) : 0;
+  }
+
+  /** Throw away a broken worker so the next call can start a fresh one. */
+  private fail(worker: Worker, error: string) {
+    if (this.worker !== worker) return; // already replaced
+    worker.onmessage = null;
+    worker.onerror = null;
+    worker.terminate();
+    this.worker = null;
+    this.booting = null;
+    this.noteFailure();
+    this.setStatus('error', { error });
+    const waiting = [...this.pending.values()];
+    this.pending.clear();
+    for (const p of waiting) p.reject(new Error('The geometry engine stopped. It restarts on your next change.'));
   }
 
   private call<T>(req: Request): Promise<T> {
@@ -78,28 +110,31 @@ class KernelClient {
     this.setStatus('busy');
     try {
       const r = await this.call<EvalPayload>({ type: 'eval', doc });
+      this.failures = 0;
+      this.retryAt = 0;
       this.setStatus('ready', { ms: r.ms });
       return r;
     } catch (e: any) {
-      this.setStatus('ready', { error: e.message });
+      // a modelling error leaves the engine fine; a crash has already set the status to error
+      if (this.worker) this.setStatus('ready', { error: e.message });
       throw e;
     }
   }
 
   async exportStep(doc: DesignDoc, ids: string[] | null) {
-    await this.start();
+    await this.start(true);
     if (!this.available) throw new Error('STEP export needs the precise geometry engine, which could not load in this browser.');
     return this.call<{ blob: Blob | null; skipped: string[] }>({ type: 'step', doc, ids });
   }
 
   async importStep(text: string) {
-    await this.start();
+    await this.start(true);
     if (!this.available) throw new Error('STEP import needs the precise geometry engine, which could not load in this browser.');
     return this.call<{ mesh: string; step: string; faces: number }>({ type: 'importStep', text });
   }
 
   async drawing(doc: DesignDoc, ids: string[] | null, views: ViewName[]) {
-    await this.start();
+    await this.start(true);
     if (!this.available) throw new Error('Drawings need the precise geometry engine, which could not load in this browser.');
     return this.call<DrawingPayload>({ type: 'drawing', doc, ids, views });
   }
@@ -216,6 +251,12 @@ export function startPreciseSync() {
   };
   store.subscribe((s, prev) => {
     if (s.result !== prev.result && s.result.quality === 'preview') kick();
+  });
+  // when the engine comes back after a failure, bring the open design up to date
+  let wasDown = false;
+  kernel.onStatus((s) => {
+    if (s === 'error') wasDown = true;
+    else if (s === 'ready' && wasDown) { wasDown = false; requested = null; kick(); }
   });
   kernel.start().then(kick);
 }
